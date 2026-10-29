@@ -1,0 +1,26 @@
+{
+  "corridor": "Valencia St, 16th-24th, SF",
+  "prompts": [
+    "what's live within a 10-min walk right now?",
+    "pin my Mission gems for tonight",
+    "best coffee with seats free now on Valencia",
+    "live music starting within the hour near 16th and Mission",
+    "quiet bar for a first date, chill vibe, walkable",
+    "cheap eats open late tonight in the Mission",
+    "gallery openings happening today nearby",
+    "where are locals actually going right now?",
+    "hidden gems within 15 minutes on foot",
+    "outdoor seating, sunny spot, right now",
+    "plan a 3-stop evening: drinks, dinner, dessert on Valencia",
+    "what's happening today that a tourist would miss?",
+    "taco spot with a 4.5+ rating within 10 minutes",
+    "bookshop-cafe hybrid open now nearby",
+    "cocktail bar with no TVs, quiet, tonight",
+    "free event within a 15 minute walk today",
+    "veg-friendly dinner, walkable, 8pm tonight",
+    "best new spot this month in the Mission",
+    "live comedy tonight within walking distance",
+    "dessert open past 10pm near 18th and Valencia"
+  ],
+  "note": "Mini-eval: DayPlay pipeline vs text-only baseline on location accuracy, freshness, taste fit. Contributor-tier model for eval burn."
+}
