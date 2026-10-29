@@ -1,0 +1,10 @@
+[
+  {"listing_id":"FIX-SYN-001","name":"Luxembourg (?) — SCHEMA DEMO ONLY","lat":37.76046,"lng":-122.41955,"kind":"event","starts_at":"2026-10-29T20:00:00-07:00","source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-002","name":"Demo pin A — replace with DayPlay MCP data","lat":37.76121,"lng":-122.42010,"kind":"saved","starts_at":null,"source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-003","name":"Demo pin B — Valencia corridor","lat":37.76198,"lng":-122.42064,"kind":"event","starts_at":"2026-10-29T21:30:00-07:00","source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-004","name":"Demo pin C — 21st & Valencia","lat":37.76277,"lng":-122.42115,"kind":"plan_stop","starts_at":"2026-10-29T22:00:00-07:00","source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-005","name":"Demo pin D — 22nd & Valencia","lat":37.76355,"lng":-122.42162,"kind":"saved","starts_at":null,"source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-006","name":"Demo pin E — 23rd & Valencia","lat":37.76432,"lng":-122.42210,"kind":"saved","starts_at":null,"source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-007","name":"Demo pin F — 24th & Valencia","lat":37.76510,"lng":-122.42258,"kind":"event","starts_at":"2026-10-29T23:00:00-07:00","source_tool":"FIXTURE-SYNTHETIC"},
+  {"listing_id":"FIX-SYN-008","name":"Demo pin G — 25th & Valencia","lat":37.76587,"lng":-122.42305,"kind":"saved","starts_at":null,"source_tool":"FIXTURE-SYNTHETIC"}
+]

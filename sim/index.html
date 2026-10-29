@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DayPlay AR — Corridor Simulator</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;font-family:-apple-system,sans-serif;overflow:hidden}
+  #hud{position:fixed;top:12px;left:12px;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 12px;border-radius:10px;max-width:340px}
+  #hud b{color:#7dd3fc}
+  #prompt{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);width:min(560px,92vw);display:flex;gap:8px}
+  #prompt input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #444;background:rgba(20,20,20,.8);color:#fff;font-size:15px}
+  #prompt button{padding:12px 18px;border-radius:12px;border:0;background:#2563eb;color:#fff;font-weight:600}
+  .placard{position:absolute;transform:translate(-50%,-100%);background:rgba(15,18,25,.92);border:1px solid rgba(125,211,252,.4);border-radius:12px;padding:8px 12px;color:#fff;font-size:13px;pointer-events:none;white-space:nowrap}
+  .placard small{color:#7dd3fc;display:block;font-size:10px;margin-top:2px}
+  .placard .dist{color:#a3e635}
+</style>
+</head>
+<body>
+<div id="hud"><b>DayPlay AR Simulator</b> — simulated FOV<br><span id="status">loading pins…</span></div>
+<div id="stage"></div>
+<div id="prompt">
+  <input id="q" placeholder="what's live within a 10-min walk?" autocomplete="off">
+  <button onclick="ask()">Pin it</button>
+</div>
+<script type="module">
+// Corridor simulator: Valencia St (SF) walk-through with placards anchored by bearing+distance.
+// Renders ONLY validated pins from the pipeline (mock provider for now). No-hallucination invariant:
+// pin.listing_id must be present or the placard is refused.
+const CFG = {fovDeg: 62, corridorLenM: 1200, walkSpeedMps: 1.4, eyeH: 1.6};
+let pins = [], user = {lat: 37.7601, lng: -122.4198, heading: 35}; // Valencia & 16th-ish, heading NW up Valencia
+
+function metersPerDeg(){ return {lat: 111320, lng: 87600 * Math.cos(user.lat*Math.PI/180)}; }
+function rel(p){ // pin position relative to user in meters (x=right, z=forward)
+  const mpd = metersPerDeg();
+  const dx = (p.lng-user.lng)*mpd.lng, dz = (p.lat-user.lat)*mpd.lat;
+  const fwd = dx*Math.sin(user.heading*Math.PI/180)+dz*Math.cos(user.heading*Math.PI/180);
+  const right = dx*Math.cos(user.heading*Math.PI/180)-dz*Math.sin(user.heading*Math.PI/180);
+  return {right, fwd, dist: Math.hypot(dx,dz)};
+}
+function renderPins(){
+  const stage = document.getElementById('stage'); stage.innerHTML='';
+  let shown=0;
+  for (const p of pins){
+    if (!p.listing_id){ console.warn('REFUSED pin without listing_id:', p); continue; } // invariant
+    const r = rel(p);
+    if (r.fwd < 0.5 || r.fwd > 300) continue;                      // behind or too far
+    const hfov = (Math.atan2(r.right, r.fwd)*180/Math.PI)/CFG.fovDeg; // -0.5..0.5 in FOV
+    if (Math.abs(hfov) > 0.5) continue;
+    const el = document.createElement('div'); el.className='placard';
+    const y = 50 - (r.fwd/300)*22 - (hfov*hfov)*6;                 // perspective-ish drop
+    el.style.left = (50 + hfov*100)+'vw'; el.style.top = y+'vh';
+    el.style.opacity = Math.max(.35, 1 - r.fwd/320);
+    el.innerHTML = `<b>${p.name}</b> <span class="dist">${Math.round(r.dist)}m</span><small>${p.kind}${p.starts_at?' · '+new Date(p.starts_at).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''} · ${p.listing_id}</small>`;
+    stage.appendChild(el); shown++;
+  }
+  document.getElementById('status').textContent = `${pins.length} validated pins · ${shown} in FOV · provider=${window.__provider||'mock'} · pos ${(user.lat.toFixed(5))},${(user.lng.toFixed(5))}`;
+}
+async function ask(){
+  const q = document.getElementById('q').value.trim(); if(!q) return;
+  document.getElementById('status').textContent = 'resolving intent…';
+  const r = await fetch('/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:q})});
+  const intent = await r.json();
+  // Mock pin selection: filter fixtures by intent radius/neighborhood until MCP lands.
+  const rad = (intent.radius_min||15)*80;
+  pins = window.__fixtures.filter(f => (f.lat-user.lat)*(f.lat-user.lat)+(f.lng-user.lng)*(f.lng-user.lng) < (rad/111320)**2);
+  renderPins();
+}
+window.ask = ask;
+async function boot(){
+  const fr = await fetch('../eval/fixtures/corridor.json'); window.__fixtures = await fr.json();
+  const h = await fetch('/health'); const hj = await h.json(); window.__provider = hj.provider;
+  pins = window.__fixtures.slice(0, 8); renderPins();
+  setInterval(()=>{ user.lat += 0.0000125*Math.cos(user.heading*Math.PI/180); user.lng += 0.0000125*Math.sin(user.heading*Math.PI/180); renderPins(); }, 1000); // slow walk up Valencia
+}
+boot();
+</script>
+</body>
+</html>
