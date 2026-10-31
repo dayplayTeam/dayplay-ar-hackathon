@@ -1,0 +1,138 @@
+{
+  "summary": {
+    "pipeline": {
+      "n": 12,
+      "p50_ms": 15.0,
+      "p95_ms": 24.6,
+      "max_ms": 29.0,
+      "min_ms": 11.0,
+      "mean_ms": 16.5
+    },
+    "render": {
+      "n": 12,
+      "p50_ms": 1.0,
+      "p95_ms": 1.0,
+      "max_ms": 1.0,
+      "min_ms": 0.0,
+      "mean_ms": 0.67
+    },
+    "total": {
+      "n": 12,
+      "p50_ms": 15.5,
+      "p95_ms": 24.6,
+      "max_ms": 29.0,
+      "min_ms": 11.0,
+      "mean_ms": 16.83
+    }
+  },
+  "per_request": [
+    {
+      "query": "what is live within a 10-min walk in the mission tonight",
+      "pipelineLatencyMs": 29,
+      "renderLatencyMs": 0,
+      "totalMs": 29,
+      "pinsReturned": 7,
+      "pinsInFov": 1,
+      "timestamp": "2026-10-31T20:56:43.639Z"
+    },
+    {
+      "query": "saved places for a chill afternoon in the mission",
+      "pipelineLatencyMs": 15,
+      "renderLatencyMs": 1,
+      "totalMs": 16,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:44.528Z"
+    },
+    {
+      "query": "coffee shops and study spots near 24th street",
+      "pipelineLatencyMs": 14,
+      "renderLatencyMs": 0,
+      "totalMs": 14,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:45.374Z"
+    },
+    {
+      "query": "music venues and live shows happening later",
+      "pipelineLatencyMs": 11,
+      "renderLatencyMs": 1,
+      "totalMs": 11,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:46.190Z"
+    },
+    {
+      "query": "family friendly parks and playgrounds nearby",
+      "pipelineLatencyMs": 21,
+      "renderLatencyMs": 1,
+      "totalMs": 21,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:47.012Z"
+    },
+    {
+      "query": "quick bites and tacos in the mission corridor",
+      "pipelineLatencyMs": 15,
+      "renderLatencyMs": 0,
+      "totalMs": 15,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:47.843Z"
+    },
+    {
+      "query": "art galleries open right now",
+      "pipelineLatencyMs": 15,
+      "renderLatencyMs": 1,
+      "totalMs": 15,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:48.494Z"
+    },
+    {
+      "query": "bars with outdoor seating along valencia",
+      "pipelineLatencyMs": 12,
+      "renderLatencyMs": 1,
+      "totalMs": 13,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:49.272Z"
+    },
+    {
+      "query": "community centers and sports drop-ins",
+      "pipelineLatencyMs": 15,
+      "renderLatencyMs": 1,
+      "totalMs": 16,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:50.027Z"
+    },
+    {
+      "query": "events happening tomorrow morning",
+      "pipelineLatencyMs": 17,
+      "renderLatencyMs": 1,
+      "totalMs": 17,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:50.726Z"
+    },
+    {
+      "query": "live comedy shows this weekend in mission",
+      "pipelineLatencyMs": 15,
+      "renderLatencyMs": 0,
+      "totalMs": 15,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:51.528Z"
+    },
+    {
+      "query": "outdoor square dance or music classes",
+      "pipelineLatencyMs": 19,
+      "renderLatencyMs": 1,
+      "totalMs": 20,
+      "pinsReturned": 10,
+      "pinsInFov": 2,
+      "timestamp": "2026-10-31T20:56:52.296Z"
+    }
+  ]
+}
