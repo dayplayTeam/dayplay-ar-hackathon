@@ -1,0 +1,823 @@
+{
+  "generated_at": "2026-10-31T20:25:15Z",
+  "provider": "mock",
+  "provider_note": "mock provider, fixture ground truth (12 real validator-passed DayPlay pins). NOT a real Muse/MCP run.",
+  "ground_truth_size": 12,
+  "ground_truth_fixture_drops": [],
+  "prompts_file": "eval/prompts.json",
+  "headline": {
+    "pipeline_prompts_total": 20,
+    "pipeline_prompts_all_pins_real": 20,
+    "pipeline_pins_emitted": 197,
+    "pipeline_hallucinated_pins": 0,
+    "pipeline_zero_halluc_assert_pass": 20,
+    "baseline_fabricated_listing_ids": 24,
+    "baseline_fabricated_venue_names": 24,
+    "baseline_prompts_with_only_fabricated_ids": 20
+  },
+  "rows": [
+    {
+      "prompt": "what's live within a 10-min walk right now?",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e"
+        ],
+        "pin_count": 7,
+        "all_listing_ids_real": true,
+        "drops": [],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 7
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "pin my Mission gems for tonight",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=tonight"
+    },
+    {
+      "prompt": "best coffee with seats free now on Valencia",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Mission Star Cafe",
+          "The Local Table"
+        ],
+        "listing_ids": [
+          "GEN-29479",
+          "GEN-33310"
+        ],
+        "hallucinated_listing_ids": 2,
+        "hallucinated_venue_names": 2
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "live music starting within the hour near 16th and Mission",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Velvet Room",
+          "Corner Bloom"
+        ],
+        "listing_ids": [
+          "GEN-36542",
+          "GEN-81675"
+        ],
+        "hallucinated_listing_ids": 2,
+        "hallucinated_venue_names": 2
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "quiet bar for a first date, chill vibe, walkable",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Blue Door Bar"
+        ],
+        "listing_ids": [
+          "GEN-16864"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "radius-walk"
+    },
+    {
+      "prompt": "cheap eats open late tonight in the Mission",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Local Table"
+        ],
+        "listing_ids": [
+          "GEN-33310"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=tonight"
+    },
+    {
+      "prompt": "gallery openings happening today nearby",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Corner Bloom"
+        ],
+        "listing_ids": [
+          "GEN-81675"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "category/vibe"
+    },
+    {
+      "prompt": "where are locals actually going right now?",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "hidden gems within 15 minutes on foot",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "radius-walk"
+    },
+    {
+      "prompt": "outdoor seating, sunny spot, right now",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Local Table"
+        ],
+        "listing_ids": [
+          "GEN-33310"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "plan a 3-stop evening: drinks, dinner, dessert on Valencia",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Blue Door Bar",
+          "The Local Table",
+          "Golden Gate Grind"
+        ],
+        "listing_ids": [
+          "GEN-16864",
+          "GEN-33310",
+          "GEN-67757"
+        ],
+        "hallucinated_listing_ids": 3,
+        "hallucinated_venue_names": 3
+      },
+      "prompt_class": "category/vibe"
+    },
+    {
+      "prompt": "what's happening today that a tourist would miss?",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "category/vibe"
+    },
+    {
+      "prompt": "taco spot with a 4.5+ rating within 10 minutes",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Local Table"
+        ],
+        "listing_ids": [
+          "GEN-33310"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "category/vibe"
+    },
+    {
+      "prompt": "bookshop-cafe hybrid open now nearby",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "cocktail bar with no TVs, quiet, tonight",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Blue Door Bar"
+        ],
+        "listing_ids": [
+          "GEN-16864"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=tonight"
+    },
+    {
+      "prompt": "free event within a 15 minute walk today",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "radius-walk"
+    },
+    {
+      "prompt": "veg-friendly dinner, walkable, 8pm tonight",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Local Table"
+        ],
+        "listing_ids": [
+          "GEN-33310"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=tonight"
+    },
+    {
+      "prompt": "best new spot this month in the Mission",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Quiet Hour"
+        ],
+        "listing_ids": [
+          "GEN-11468"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "neighborhood=mission"
+    },
+    {
+      "prompt": "live comedy tonight within walking distance",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=now"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "The Night Owl"
+        ],
+        "listing_ids": [
+          "GEN-84655"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "time=now"
+    },
+    {
+      "prompt": "dessert open past 10pm near 18th and Valencia",
+      "provider": "mock",
+      "pipeline": {
+        "pins": [
+          "99e10699-82fa-443e-af29-b654ead58adb",
+          "20f9810c-be32-4ede-9923-26d6b1e951bb",
+          "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+          "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+          "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+          "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+          "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+          "e71405b0-7557-4a99-aa53-9c54975b374f",
+          "4b692c9d-c84f-492c-9c45-77554bb0d564",
+          "90810f59-572e-450f-9c1e-b7d10fb18f34"
+        ],
+        "pin_count": 10,
+        "all_listing_ids_real": true,
+        "drops": [
+          "freshness tier 'stale' not eligible for window=today"
+        ],
+        "zero_hallucination_assert": "pass",
+        "freshness": {
+          "live": 0,
+          "scheduled": 0,
+          "standing": 10
+        }
+      },
+      "baseline": {
+        "venues": [
+          "Golden Gate Grind"
+        ],
+        "listing_ids": [
+          "GEN-67757"
+        ],
+        "hallucinated_listing_ids": 1,
+        "hallucinated_venue_names": 1
+      },
+      "prompt_class": "category/vibe"
+    }
+  ]
+}
