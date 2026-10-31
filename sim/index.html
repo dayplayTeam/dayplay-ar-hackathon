@@ -61,16 +61,27 @@ async function ask(){
   document.getElementById('status').textContent = 'resolving intent…';
   const r = await fetch('/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:q})});
   const intent = await r.json();
-  // Mock pin selection: filter fixtures by intent radius/neighborhood until MCP lands.
+  // Mock pin selection: filter active pins by intent radius until model provider lands.
   const rad = (intent.radius_min||15)*80;
   pins = window.__fixtures.filter(f => (f.lat-user.lat)*(f.lat-user.lat)+(f.lng-user.lng)*(f.lng-user.lng) < (rad/111320)**2);
   renderPins();
 }
 window.ask = ask;
 async function boot(){
-  const fr = await fetch('../eval/fixtures/corridor.json'); window.__fixtures = await fr.json();
   const h = await fetch('/health'); const hj = await h.json(); window.__provider = hj.provider;
-  pins = window.__fixtures.slice(0, 8); renderPins();
+  // Prefer REAL validated DayPlay pins; fall back to synthetic dev fixtures with a visible warning.
+  try {
+    const rr = await fetch('/pins?source=real');
+    const rj = await rr.json();
+    if (rj.pins && rj.pins.length){ window.__fixtures = rj.pins; window.__source = 'real'; }
+  } catch(e){ console.warn('real pins fetch failed', e); }
+  if (!window.__fixtures){
+    const fr = await fetch('/pins?source=synthetic');
+    const fj = await fr.json();
+    window.__fixtures = fj.pins || [];
+    window.__source = 'synthetic (DEV-ONLY — not real DayPlay data)';
+  }
+  pins = window.__fixtures.slice(0, 12); renderPins();
   setInterval(()=>{ user.lat += 0.0000125*Math.cos(user.heading*Math.PI/180); user.lng += 0.0000125*Math.sin(user.heading*Math.PI/180); renderPins(); }, 1000); // slow walk up Valencia
 }
 boot();

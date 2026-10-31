@@ -1,0 +1,110 @@
+[
+  {
+    "listing_id": "282cf864-4476-48b5-889a-9065df76e148",
+    "name": "Bachata Kizomba Sunday - Hello  Bachata/Kizomba Dance Party and Class",
+    "lat": 37.7632931,
+    "lng": -122.4079495,
+    "kind": "saved",
+    "starts_at": "2026-11-08T23:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "4b692c9d-c84f-492c-9c45-77554bb0d564",
+    "name": "Consultas disponibles (Spanish, Consultation)",
+    "lat": 37.750311000001,
+    "lng": -122.417928000002,
+    "kind": "saved",
+    "starts_at": "2026-06-29T17:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "e71405b0-7557-4a99-aa53-9c54975b374f",
+    "name": "Free Book Shop Comedy Night: Stand-Up in a Bookstore (SF)",
+    "lat": 37.752636,
+    "lng": -122.414789,
+    "kind": "saved",
+    "starts_at": "2026-08-01T02:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "f9af940f-6981-43b8-9751-20b9c9631a2e",
+    "name": "Where to Watch Mission District\u2019s 4th of July Street Fireworks | 2026",
+    "lat": 37.753004,
+    "lng": -122.408399,
+    "kind": "saved",
+    "starts_at": "2026-07-05T03:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "99e10699-82fa-443e-af29-b654ead58adb",
+    "name": "Feral Friday: Frisky Community Square Dance + Beginner Class (SF)",
+    "lat": 37.755818,
+    "lng": -122.415249,
+    "kind": "saved",
+    "starts_at": "2026-07-11T02:30:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "27c32f1e-2f8e-43d4-b606-b97e1ecaaad1",
+    "name": "Drop-in: Racquetball/Squash",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-06-30T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "c86e622b-96f5-43ca-809c-0ba75a7bf57e",
+    "name": "GPS - Mission Rec - Session 2",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-07-06T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "20f9810c-be32-4ede-9923-26d6b1e951bb",
+    "name": "Drop-in: Weight Room",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-06-30T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "6bf48fc2-cc37-4c40-823f-c6f586caecc5",
+    "name": "GPS - Mission Rec - Session 4",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-08-03T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "a6d3d158-cbb2-4588-9cfc-f25f03d1f045",
+    "name": "GPS Girls Sports Camp - Mission Rec Session 4",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-08-03T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "9ef5ee6f-5016-40fa-9ef5-e8562e8a0333",
+    "name": "Girls Sports Camp (GPS) - Mission Rec - Session 3",
+    "lat": 37.758150000001,
+    "lng": -122.412600000002,
+    "kind": "saved",
+    "starts_at": "2026-07-27T16:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  },
+  {
+    "listing_id": "90810f59-572e-450f-9c1e-b7d10fb18f34",
+    "name": "Shame Cave Comedy Show: A Shameful Yet Shameless Night",
+    "lat": 37.763361,
+    "lng": -122.407093,
+    "kind": "saved",
+    "starts_at": "2026-07-10T03:00:00+00:00",
+    "source_tool": "supabase_entities_anon"
+  }
+]

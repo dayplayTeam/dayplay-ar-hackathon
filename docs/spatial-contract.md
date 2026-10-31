@@ -28,7 +28,9 @@ that differentiates us (and the core of our Impact story).
 
 ## Corridor Fixtures (Mission St, SF)
 Demo corridor: Valencia St between 16th St and 24th St.
-- Fixture file: `eval/fixtures/corridor.json` (populated from DayPlay data when MCP auth lands; until then schema-valid synthetic fixtures marked `"source_tool": "FIXTURE-SYNTHETIC"` are allowed for simulator development ONLY — never in the demo video).
+- `eval/fixtures/corridor_real.json` — REAL pins from DayPlay Supabase `entities` (anon REST, `status=published`), source_tool `supabase_entities_anon`, validated through the gate. This is the demo/default source.
+- `eval/fixtures/corridor.json` — schema-valid synthetic fixtures marked `"source_tool": "FIXTURE-SYNTHETIC"`, simulator development ONLY — never in the demo video.
+- Rebuild real fixtures with `eval/build_real_fixture.py` (anon key stays in a local gitignored env file).
 
 ## Grounding
 `sam-3.1` returns `<|box;x1,y1,x2,y2|>` geometry per storefront frame; the client
