@@ -3,88 +3,137 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DayPlay AR — Corridor Simulator</title>
+<title>DayPlay AR — Mission Corridor Simulator</title>
 <style>
-  html,body{margin:0;height:100%;background:#000;font-family:-apple-system,sans-serif;overflow:hidden}
-  #hud{position:fixed;top:12px;left:12px;color:#fff;font-size:13px;background:rgba(0,0,0,.55);padding:10px 12px;border-radius:10px;max-width:340px}
-  #hud b{color:#7dd3fc}
-  #prompt{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);width:min(560px,92vw);display:flex;gap:8px}
-  #prompt input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #444;background:rgba(20,20,20,.8);color:#fff;font-size:15px}
-  #prompt button{padding:12px 18px;border-radius:12px;border:0;background:#2563eb;color:#fff;font-weight:600}
-  .placard{position:absolute;transform:translate(-50%,-100%);background:rgba(15,18,25,.92);border:1px solid rgba(125,211,252,.4);border-radius:12px;padding:8px 12px;color:#fff;font-size:13px;pointer-events:none;white-space:nowrap}
-  .placard small{color:#7dd3fc;display:block;font-size:10px;margin-top:2px}
-  .placard .dist{color:#a3e635}
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; width: 100%; background: #07090e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #fff; }
+  
+  /* Reticle / FOV Grid */
+  #viewfinder {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+  }
+  .reticle {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 24px; height: 24px; border: 1.5px solid rgba(125, 211, 252, 0.4); border-radius: 50%;
+  }
+  .reticle::after {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 4px; height: 4px; background: #7dd3fc; border-radius: 50%;
+  }
+
+  /* HUD Top Header */
+  #hud {
+    position: fixed; top: 16px; left: 16px;
+    background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+    border: 1px solid rgba(125, 211, 252, 0.25);
+    padding: 12px 18px; border-radius: 12px; max-width: 420px; z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #hud-title { font-size: 14px; font-weight: 700; color: #7dd3fc; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  #status { font-size: 13px; color: #cbd5e1; line-height: 1.4; }
+  #telemetry { font-size: 11px; color: #94a3b8; font-family: ui-monospace, monospace; margin-top: 6px; }
+
+  /* Controls Bar */
+  #controls {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    display: flex; gap: 8px; align-items: center;
+    background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+    border: 1px solid rgba(125, 211, 252, 0.25);
+    padding: 8px 12px; border-radius: 12px;
+  }
+  .ctrl-btn {
+    background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
+    padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ctrl-btn:hover { background: #334155; color: #fff; }
+  .ctrl-btn.active { background: #0284c7; border-color: #38bdf8; color: #fff; }
+
+  /* Stage / 3D Projection Area */
+  #stage { position: absolute; inset: 0; perspective: 900px; overflow: hidden; pointer-events: none; }
+
+  /* Placards (AR Pin Overlays) */
+  .placard {
+    position: absolute; transform: translate(-50%, -100%);
+    background: rgba(11, 15, 25, 0.94); backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(125, 211, 252, 0.5);
+    border-radius: 12px; padding: 10px 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.7), 0 0 16px rgba(56, 189, 248, 0.15);
+    pointer-events: auto; white-space: nowrap; transition: opacity 0.2s, transform 0.1s;
+    user-select: none;
+  }
+  .placard:hover { border-color: #38bdf8; z-index: 50; }
+  .placard-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .badge-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: bold;
+  }
+  .kind-saved { background: rgba(59, 130, 246, 0.25); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); }
+  .kind-event { background: rgba(236, 72, 153, 0.25); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.4); }
+  .kind-plan_stop { background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); }
+  
+  .pin-title { font-size: 13px; font-weight: 700; color: #f8fafc; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  .pin-dist { margin-left: auto; color: #a3e635; font-weight: 700; font-family: ui-monospace, monospace; font-size: 13px; padding-left: 8px; }
+  .pin-meta { font-size: 11px; color: #94a3b8; display: flex; gap: 8px; align-items: center; }
+  .pin-id { font-family: ui-monospace, monospace; color: #64748b; font-size: 10px; }
+
+  /* Input Prompt */
+  #prompt {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    width: min(640px, 92vw); display: flex; gap: 8px; z-index: 100;
+  }
+  #q {
+    flex: 1; padding: 14px 18px; border-radius: 14px;
+    border: 1px solid rgba(125, 211, 252, 0.3); background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px); color: #fff; font-size: 15px; outline: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #q:focus { border-color: #38bdf8; }
+  #btn-pin {
+    padding: 14px 24px; border-radius: 14px; border: 0;
+    background: linear-gradient(135deg, #0284c7, #2563eb);
+    color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4);
+    transition: opacity 0.15s;
+  }
+  #btn-pin:hover { opacity: 0.9; }
+
+  /* Compass Bar */
+  #compass {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(125, 211, 252, 0.2);
+    border-radius: 20px; padding: 4px 16px; font-family: ui-monospace, monospace;
+    font-size: 12px; color: #7dd3fc; z-index: 90;
+  }
 </style>
 </head>
 <body>
-<div id="hud"><b>DayPlay AR Simulator</b> — simulated FOV<br><span id="status">loading pins…</span></div>
-<div id="stage"></div>
-<div id="prompt">
-  <input id="q" placeholder="what's live within a 10-min walk?" autocomplete="off">
-  <button onclick="ask()">Pin it</button>
+<div id="viewfinder">
+  <div class="reticle"></div>
 </div>
-<script type="module">
-// Corridor simulator: Valencia St (SF) walk-through with placards anchored by bearing+distance.
-// Renders ONLY validated pins from the pipeline (mock provider for now). No-hallucination invariant:
-// pin.listing_id must be present or the placard is refused.
-const CFG = {fovDeg: 62, corridorLenM: 1200, walkSpeedMps: 1.4, eyeH: 1.6};
-let pins = [], user = {lat: 37.7601, lng: -122.4198, heading: 35}; // Valencia & 16th-ish, heading NW up Valencia
 
-function metersPerDeg(){ return {lat: 111320, lng: 87600 * Math.cos(user.lat*Math.PI/180)}; }
-function rel(p){ // pin position relative to user in meters (x=right, z=forward)
-  const mpd = metersPerDeg();
-  const dx = (p.lng-user.lng)*mpd.lng, dz = (p.lat-user.lat)*mpd.lat;
-  const fwd = dx*Math.sin(user.heading*Math.PI/180)+dz*Math.cos(user.heading*Math.PI/180);
-  const right = dx*Math.cos(user.heading*Math.PI/180)-dz*Math.sin(user.heading*Math.PI/180);
-  return {right, fwd, dist: Math.hypot(dx,dz)};
-}
-function renderPins(){
-  const stage = document.getElementById('stage'); stage.innerHTML='';
-  let shown=0;
-  for (const p of pins){
-    if (!p.listing_id){ console.warn('REFUSED pin without listing_id:', p); continue; } // invariant
-    const r = rel(p);
-    if (r.fwd < 0.5 || r.fwd > 300) continue;                      // behind or too far
-    const hfov = (Math.atan2(r.right, r.fwd)*180/Math.PI)/CFG.fovDeg; // -0.5..0.5 in FOV
-    if (Math.abs(hfov) > 0.5) continue;
-    const el = document.createElement('div'); el.className='placard';
-    const y = 50 - (r.fwd/300)*22 - (hfov*hfov)*6;                 // perspective-ish drop
-    el.style.left = (50 + hfov*100)+'vw'; el.style.top = y+'vh';
-    el.style.opacity = Math.max(.35, 1 - r.fwd/320);
-    el.innerHTML = `<b>${p.name}</b> <span class="dist">${Math.round(r.dist)}m</span><small>${p.kind}${p.starts_at?' · '+new Date(p.starts_at).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''} · ${p.listing_id}</small>`;
-    stage.appendChild(el); shown++;
-  }
-  document.getElementById('status').textContent = `${pins.length} validated pins · ${shown} in FOV · provider=${window.__provider||'mock'} · pos ${(user.lat.toFixed(5))},${(user.lng.toFixed(5))}`;
-}
-async function ask(){
-  const q = document.getElementById('q').value.trim(); if(!q) return;
-  document.getElementById('status').textContent = 'resolving intent…';
-  const r = await fetch('/intent', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text:q})});
-  const intent = await r.json();
-  // Mock pin selection: filter active pins by intent radius until model provider lands.
-  const rad = (intent.radius_min||15)*80;
-  pins = window.__fixtures.filter(f => (f.lat-user.lat)*(f.lat-user.lat)+(f.lng-user.lng)*(f.lng-user.lng) < (rad/111320)**2);
-  renderPins();
-}
-window.ask = ask;
-async function boot(){
-  const h = await fetch('/health'); const hj = await h.json(); window.__provider = hj.provider;
-  // Prefer REAL validated DayPlay pins; fall back to synthetic dev fixtures with a visible warning.
-  try {
-    const rr = await fetch('/pins?source=real');
-    const rj = await rr.json();
-    if (rj.pins && rj.pins.length){ window.__fixtures = rj.pins; window.__source = 'real'; }
-  } catch(e){ console.warn('real pins fetch failed', e); }
-  if (!window.__fixtures){
-    const fr = await fetch('/pins?source=synthetic');
-    const fj = await fr.json();
-    window.__fixtures = fj.pins || [];
-    window.__source = 'synthetic (DEV-ONLY — not real DayPlay data)';
-  }
-  pins = window.__fixtures.slice(0, 12); renderPins();
-  setInterval(()=>{ user.lat += 0.0000125*Math.cos(user.heading*Math.PI/180); user.lng += 0.0000125*Math.sin(user.heading*Math.PI/180); renderPins(); }, 1000); // slow walk up Valencia
-}
-boot();
-</script>
+<div id="compass">HDG <span id="hdg-val">035°</span> NW (Mission Corridor)</div>
+
+<div id="hud">
+  <div id="hud-title">DayPlay AR Corridor Simulator</div>
+  <div id="status">Booting…</div>
+  <div id="telemetry">LAT 37.75031 · LNG -122.41793 · SPEED 1.4 m/s</div>
+</div>
+
+<div id="controls">
+  <button id="btn-walk" class="ctrl-btn active" onclick="toggleWalk()">Walk: ON</button>
+  <button id="btn-speed" class="ctrl-btn" onclick="toggleSpeed()">Speed: 1x</button>
+  <button id="btn-reset" class="ctrl-btn" onclick="resetWalk()">Reset</button>
+</div>
+
+<div id="stage"></div>
+
+<div id="prompt">
+  <input id="q" placeholder="Type intent: e.g. what is live within a 10-min walk in the mission tonight" autocomplete="off">
+  <button id="btn-pin" onclick="ask()">Pin it</button>
+</div>
+
+<script type="module" src="/sim/app.js"></script>
 </body>
 </html>
