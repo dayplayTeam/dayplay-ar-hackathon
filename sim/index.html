@@ -2,16 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>DayPlay AR — Mission Corridor Simulator</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; width: 100%; background: #07090e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #fff; }
   
+  /* Video / Camera Passthrough Layer */
+  #camera-feed {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0; display: none;
+    pointer-events: none;
+  }
+
+  /* Synthetic AR Background Layer (Fallback / Default) */
+  #synthetic-bg {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(circle at 50% 40%, #0f172a 0%, #07090e 70%, #020617 100%);
+  }
+  .grid-floor {
+    position: absolute; bottom: 0; left: -50%; width: 200%; height: 50%;
+    background: linear-gradient(rgba(14, 165, 233, 0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(14, 165, 233, 0.12) 1px, transparent 1px);
+    background-size: 40px 40px;
+    transform: perspective(400px) rotateX(65deg);
+    transform-origin: center bottom;
+    mask-image: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 80%);
+    -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 80%);
+  }
+
   /* Reticle / FOV Grid */
   #viewfinder {
-    position: fixed; inset: 0; pointer-events: none;
-    background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.5) 100%);
   }
   .reticle {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -30,7 +53,16 @@
     padding: 12px 18px; border-radius: 12px; max-width: 420px; z-index: 100;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   }
-  #hud-title { font-size: 14px; font-weight: 700; color: #7dd3fc; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  #hud-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; color: #7dd3fc; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .camera-badge {
+    font-size: 10px; font-family: ui-monospace, monospace; padding: 2px 6px; border-radius: 4px;
+    letter-spacing: 0; text-transform: none; font-weight: 600;
+  }
+  .camera-badge.state-active { background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+  .camera-badge.state-fallback, .camera-badge.state-idle { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+  .camera-badge.state-requesting { background: rgba(234, 179, 8, 0.25); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.4); }
+  .camera-badge.state-unsupported { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4); }
+
   #status { font-size: 13px; color: #cbd5e1; line-height: 1.4; }
   #telemetry { font-size: 11px; color: #94a3b8; font-family: ui-monospace, monospace; margin-top: 6px; }
 
@@ -49,9 +81,12 @@
   }
   .ctrl-btn:hover { background: #334155; color: #fff; }
   .ctrl-btn.active { background: #0284c7; border-color: #38bdf8; color: #fff; }
+  .ctrl-btn-cam {
+    background: #0369a1; border-color: #0284c7; color: #e0f2fe;
+  }
 
   /* Stage / 3D Projection Area */
-  #stage { position: absolute; inset: 0; perspective: 900px; overflow: hidden; pointer-events: none; }
+  #stage { position: absolute; inset: 0; perspective: 900px; overflow: hidden; pointer-events: none; z-index: 10; }
 
   /* Placards (AR Pin Overlays) */
   .placard {
@@ -109,6 +144,14 @@
 </style>
 </head>
 <body>
+<!-- Camera Passthrough Video (Real Feed) -->
+<video id="camera-feed" playsinline webkit-playsinline muted autoplay></video>
+
+<!-- Synthetic AR Background (Fallback) -->
+<div id="synthetic-bg">
+  <div class="grid-floor"></div>
+</div>
+
 <div id="viewfinder">
   <div class="reticle"></div>
 </div>
@@ -116,12 +159,16 @@
 <div id="compass">HDG <span id="hdg-val">035°</span> NW (Mission Corridor)</div>
 
 <div id="hud">
-  <div id="hud-title">DayPlay AR Corridor Simulator</div>
+  <div id="hud-title">
+    <span>DayPlay AR Simulator</span>
+    <span id="camera-status-badge" class="camera-badge state-idle">CAM: TAP TO START</span>
+  </div>
   <div id="status">Booting…</div>
   <div id="telemetry">LAT 37.75031 · LNG -122.41793 · SPEED 1.4 m/s</div>
 </div>
 
 <div id="controls">
+  <button id="btn-camera" class="ctrl-btn ctrl-btn-cam" onclick="toggleCamera()">Camera: Tap</button>
   <button id="btn-walk" class="ctrl-btn active" onclick="toggleWalk()">Walk: ON</button>
   <button id="btn-speed" class="ctrl-btn" onclick="toggleSpeed()">Speed: 1x</button>
   <button id="btn-reset" class="ctrl-btn" onclick="resetWalk()">Reset</button>

@@ -8,7 +8,10 @@
  * 1. ZERO-HALLUCINATION: pins must have a listing_id present in the verified response.
  * 2. ONLY pipeline output pins are rendered (with /pins boot fallback).
  * 3. Latency logging: window.__latencyLog tracks intent -> render ms.
+ * 4. T4a: Real-camera passthrough via getUserMedia with graceful synthetic fallback.
  */
+
+import { CameraFeedManager, CameraState } from './camera.js';
 
 // Latency artifact log for evaluations/QA
 window.__latencyLog = [];
@@ -25,6 +28,7 @@ let speedMultiplier = 3.0; // Default 3x so pins approach visibly in 10-20s
 let isWalking = true;
 let pins = [];
 let walkTimer = null;
+let cameraManager = null;
 
 // Initial walker position at South end of Mission corridor (near 24th St / Mission Rec)
 // Heading ~35° (North-East along Mission St / corridor axis toward 16th St)
@@ -38,7 +42,7 @@ let user = { ...START_POS };
 
 // Geometry helpers
 // Confirmed geometry: lat=111320, lng=111320*cos(lat)
-function metersPerDeg(latDeg) {
+export function metersPerDeg(latDeg) {
   const latRad = (latDeg * Math.PI) / 180.0;
   return {
     lat: 111320.0,
@@ -46,12 +50,12 @@ function metersPerDeg(latDeg) {
   };
 }
 
-function relCoords(pin) {
-  const mpd = metersPerDeg(user.lat);
-  const dx = (pin.lng - user.lng) * mpd.lng; // Easting (meters)
-  const dz = (pin.lat - user.lat) * mpd.lat; // Northing (meters)
+export function relCoords(pin, currentUser = user) {
+  const mpd = metersPerDeg(currentUser.lat);
+  const dx = (pin.lng - currentUser.lng) * mpd.lng; // Easting (meters)
+  const dz = (pin.lat - currentUser.lat) * mpd.lat; // Northing (meters)
 
-  const headRad = (user.heading * Math.PI) / 180.0;
+  const headRad = (currentUser.heading * Math.PI) / 180.0;
   const sinH = Math.sin(headRad);
   const cosH = Math.cos(headRad);
 
@@ -63,7 +67,7 @@ function relCoords(pin) {
   return { right, fwd, dist };
 }
 
-function getKindIcon(kind) {
+export function getKindIcon(kind) {
   if (kind === 'event') return { icon: '⚡', class: 'kind-event', label: 'EVENT' };
   if (kind === 'plan_stop') return { icon: '📍', class: 'kind-plan_stop', label: 'STOP' };
   return { icon: '★', class: 'kind-saved', label: 'SAVED' };
@@ -247,6 +251,16 @@ export function resetWalk() {
   renderPins();
 }
 
+export async function toggleCamera() {
+  if (cameraManager) {
+    await cameraManager.toggle();
+  }
+}
+
+export function getCameraManager() {
+  return cameraManager;
+}
+
 export async function boot() {
   try {
     const h = await fetch('/health');
@@ -255,6 +269,20 @@ export async function boot() {
   } catch (e) {
     console.warn('Health check failed', e);
   }
+
+  // Initialize camera feed manager
+  const videoEl = document.getElementById('camera-feed');
+  const syntheticEl = document.getElementById('synthetic-bg');
+  const badgeEl = document.getElementById('camera-status-badge');
+  const toggleBtn = document.getElementById('btn-camera');
+
+  cameraManager = new CameraFeedManager({
+    videoEl,
+    syntheticEl,
+    badgeEl,
+    toggleBtn,
+  });
+  window.__cameraManager = cameraManager;
 
   // Initial pins fallback from /pins (real Mission corridor dataset)
   try {
@@ -286,6 +314,7 @@ window.ask = ask;
 window.toggleWalk = toggleWalk;
 window.toggleSpeed = toggleSpeed;
 window.resetWalk = resetWalk;
+window.toggleCamera = toggleCamera;
 window.renderPins = renderPins;
 
 // Auto-boot on load
