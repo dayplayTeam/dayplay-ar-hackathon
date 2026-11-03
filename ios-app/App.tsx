@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import PlacardOverlay, { type OverlayStats } from "./src/components/PlacardOverlay.tsx";
+import HudBar, { type HudBarProps } from "./src/components/HudBar.tsx";
 import { CORRIDOR_REAL_FIXTURES, fetchRealPins, type PinSource } from "./src/data/pinsClient.ts";
 
 /** Live telemetry from the phone's GPS + compass rig. */
@@ -82,7 +83,9 @@ function ArCameraScreen() {
   const [pinSourceNote, setPinSourceNote] = useState<string | null>(null);
   const [overlayStats, setOverlayStats] = useState<OverlayStats | null>(null);
   const [anchorToSf, setAnchorToSf] = useState<boolean>(true);
-  const [cleanView, setCleanView] = useState<boolean>(false);
+  // HUD density: "standard" pill bar | "expanded" telemetry panel | "minimized"
+  // near-invisible dot (REC VIEW equivalent) for a clean camera viewport.
+  const [hudMode, setHudMode] = useState<HudBarProps["hudMode"]>("standard");
 
   useEffect(() => {
     let cancelled = false;
@@ -232,94 +235,33 @@ function ArCameraScreen() {
         onStats={onOverlayStats}
       />
 
-      {/* Top HUD: GPS + heading telemetry (can be minimized for clean recording) */}
-      {cleanView ? (
-        <Pressable
-          onPress={() => setCleanView(false)}
-          style={[styles.cleanViewBadge, { top: insets.top + 8 }]}
-        >
-          <Text style={styles.cleanViewBadgeText}>AR ACTIVE · TAP TO SHOW HUD</Text>
-        </Pressable>
-      ) : (
-        <View style={[styles.hud, { top: insets.top + 8 }]}>
-        <Text style={styles.hudTitle}>AR RIG · LIVE</Text>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>LAT</Text>
-          <Text style={styles.hudValue}>{rig.latitude?.toFixed(6) ?? "--"}</Text>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>LNG</Text>
-          <Text style={styles.hudValue}>{rig.longitude?.toFixed(6) ?? "--"}</Text>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>HDG</Text>
-          <Text style={styles.hudValue}>
-            {rig.heading !== null ? `${rig.heading}°` : "--"}
-            {rig.headingAccuracy !== null ? ` ±${rig.headingAccuracy}` : ""}
-          </Text>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>ACC</Text>
-          <Text style={styles.hudValue}>
-            {rig.accuracy !== null ? `${rig.accuracy.toFixed(0)} m` : "--"}
-          </Text>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>GPS</Text>
-          <StatusPill ok={rig.gpsStatus === "locked"} label={rig.gpsStatus} />
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>CMP</Text>
-          <StatusPill ok={rig.headingStatus === "locked"} label={rig.headingStatus} />
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>RIG</Text>
-          <StatusPill ok={rigReady(rig)} label={rigReady(rig) ? "ready" : "warming"} />
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>PINS</Text>
-          <Text style={styles.hudValue}>
-            {overlayStats
-              ? `${overlayStats.visiblePins}/${overlayStats.totalPins} in ${62}° FOV`
-              : "--"}
-            {overlayStats && overlayStats.rejectedPins > 0
-              ? ` (${overlayStats.rejectedPins} gated)`
-              : ""}
-          </Text>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>SRC</Text>
-          <StatusPill
-            ok={pinSource === "live"}
-            label={
-              pinSource === "live"
-                ? "LIVE API"
-                : pinSourceNote
-                  ? `DEMO (${pinSourceNote})`
-                  : "DEMO"
-            }
-          />
-          <Pressable onPress={togglePinSource} hitSlop={8} style={styles.toggleButton}>
-            <Text style={styles.toggleText}>
-              {pinSource === "demo" ? "TRY LIVE API" : "DEMO PINS"}
-            </Text>
-          </Pressable>
-        </View>
-        <View style={styles.hudRow}>
-          <Text style={styles.hudLabel}>MODE</Text>
-          <StatusPill ok={anchorToSf} label={anchorToSf ? "SF ANCHOR (DEMO)" : "LIVE GPS"} />
-          <Pressable onPress={() => setAnchorToSf((prev) => !prev)} hitSlop={8} style={styles.toggleButton}>
-            <Text style={styles.toggleText}>
-              {anchorToSf ? "USE DEVICE GPS" : "ANCHOR TO SF"}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => setCleanView(true)} hitSlop={8} style={[styles.toggleButton, styles.recButton]}>
-            <Text style={styles.recText}>REC VIEW</Text>
-          </Pressable>
-        </View>
-        {rig.error ? <Text style={styles.hudError}>{rig.error}</Text> : null}
+      {/* Top HUD: compact pill bar (standard) / telemetry panel (expanded)
+          / near-invisible dot (minimized = REC VIEW equivalent). */}
+      <View pointerEvents="box-none" style={[styles.hudWrap, { top: insets.top + 8 }]}>
+        <HudBar
+          heading={rig.heading}
+          headingAccuracy={rig.headingAccuracy}
+          pinsVisible={overlayStats?.visiblePins ?? null}
+          pinsTotal={overlayStats?.totalPins ?? null}
+          pinsRejected={overlayStats?.rejectedPins ?? 0}
+          venueCards={overlayStats?.venueCards ?? 0}
+          pinSource={pinSource}
+          pinSourceNote={pinSourceNote}
+          anchorToSf={anchorToSf}
+          hudMode={hudMode}
+          onHudMode={setHudMode}
+          onTogglePinSource={togglePinSource}
+          onToggleAnchor={() => setAnchorToSf((prev) => !prev)}
+          rig={{
+            gpsStatus: rig.gpsStatus,
+            headingStatus: rig.headingStatus,
+            gpsOk: rig.gpsStatus === "locked",
+            headingOk: rig.headingStatus === "locked",
+            ready: rigReady(rig),
+            error: rig.error,
+          }}
+        />
       </View>
-      )}
 
       {!cameraGranted ? (
         <PermissionPanel status={cameraPermission?.status ?? "undetermined"} onRequest={() => void requestCameraPermission()} />
@@ -330,14 +272,6 @@ function ArCameraScreen() {
           <Text style={styles.centerNoticeText}>Camera paused</Text>
         </View>
       ) : null}
-    </View>
-  );
-}
-
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <View style={[styles.pill, ok ? styles.pillOk : styles.pillWarn]}>
-      <Text style={styles.pillText}>{label}</Text>
     </View>
   );
 }
@@ -366,50 +300,7 @@ function PermissionPanel({ status, onRequest }: { status: string; onRequest: () 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
   container: { flex: 1, backgroundColor: "#000" },
-  hud: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    gap: 4,
-  },
-  hudTitle: { color: "#7dd3fc", fontWeight: "700", fontSize: 12, letterSpacing: 1 },
-  hudRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  hudLabel: { color: "#94a3b8", width: 42, fontSize: 12, fontWeight: "600" },
-  hudValue: { color: "#fff", fontSize: 13, fontVariant: ["tabular-nums"] },
-  hudError: { color: "#fca5a5", fontSize: 11, marginTop: 4 },
-  pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  pillOk: { backgroundColor: "rgba(34,197,94,0.25)" },
-  pillWarn: { backgroundColor: "rgba(234,179,8,0.25)" },
-  pillText: { color: "#e2e8f0", fontSize: 10, fontWeight: "700" },
-  toggleButton: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: "rgba(14,165,233,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(14,165,233,0.4)",
-    overflow: "hidden",
-  },
-  toggleText: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
-  recButton: {
-    backgroundColor: "rgba(239,68,68,0.25)",
-    borderColor: "rgba(239,68,68,0.5)",
-  },
-  recText: { color: "#fca5a5", fontSize: 10, fontWeight: "800" },
-  cleanViewBadge: {
-    position: "absolute",
-    alignSelf: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  cleanViewBadgeText: { color: "#38bdf8", fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
+  hudWrap: { position: "absolute", left: 16, right: 16, alignItems: "center" },
   centerNotice: {
     position: "absolute",
     top: 0,

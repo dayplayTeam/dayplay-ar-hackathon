@@ -1,7 +1,7 @@
 /**
- * PlacardOverlay — M2 floating spatial placards rendered over the camera.
+ * PlacardOverlay — M2/M4 floating spatial placards rendered over the camera.
  *
- * Pipeline (all math from src/math, the shared contract implementation):
+ * Pipeline (all geometry from src/math, the shared contract implementation):
  *   1. validatePins()    zero-hallucination gate: drop invalid/out-of-range
  *                        pins (never repair — a pin without a verified
  *                        listing does not exist).
@@ -10,23 +10,58 @@
  *   3. screen mapping    screenX = screenWidth * (screenXNorm * 0.5 + 0.5),
  *                        reproducing the web simulator's
  *                        `screenX_vw = 50 + hfov * 100` geometry.
- *   4. vertical layout   distance-based placement below the center horizon
- *                        line (near pins lower on screen, far pins near the
- *                        horizon), plus simple collision stacking for pins
- *                        that share a screen position (e.g. same venue).
+ *   4. venue clustering  pins sharing a venue (coords within
+ *                        CLUSTER_RADIUS_M) collapse into ONE primary venue
+ *                        card with a "+N more activities" badge — tapping
+ *                        expands a staggered page-deck of the cluster.
+ *                        Residual collisions between DIFFERENT venues are
+ *                        resolved with guaranteed vertical spacing
+ *                        (resolveOverlaps) so cards never overlap illegibly.
  *   5. depth styling     scale + opacity attenuate with distance.
+ *
+ * Interaction (tappable placards):
+ *   collapsed  — tap the venue card -> expand (page 0 focused).
+ *   expanded   — focused DetailPage at the venue anchor with full details
+ *                (starts_at, listing id, Directions handoff); other cluster
+ *                pages stagger dimmed below, tap one to focus it; tap the
+ *                backdrop or Close to collapse back to the venue card.
+ *   The deck window shows at most MAX_VISIBLE_STACK pages so a big cluster
+ *   never runs off-screen.
+ *
+ * Styling: DayPlay dark canon — surface #1C1B1A glass (rgba .85), hairline
+ * border #2A2826, coral #FF6B47 for primary/active, text #F5F4F2 / #A19D97,
+ * 16 px rounded corners, layered shadows + top highlight for depth.
  */
 
-import { useEffect, useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
-  HFOV_DEG,
   MAX_RANGE_METERS,
   projectPin,
   validatePins,
   type GateReason,
 } from "../math/index.ts";
+import {
+  ACCENT_CORAL,
+  BORDER,
+  CORAL_TINT,
+  KIND_COLORS,
+  KIND_LABELS,
+  RADIUS,
+  SURFACE_GLASS,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+} from "../theme/dayplay.ts";
+import { formatBearing, formatDistance, formatStartsAt } from "../utils/format.ts";
+import {
+  groupByVenue,
+  MAX_VISIBLE_STACK,
+  pickPrimary,
+  resolveOverlaps,
+  STACK_GAP_PX,
+  withClusterSummary,
+} from "../utils/layout.ts";
 
 /** Unverified pin as received from the network or the bundled fixture. */
 export interface RawPin {
@@ -62,6 +97,10 @@ export interface PlacedPlacard {
   depthScale: number;
   /** Visual opacity (1.0 = closest, 0.55 = far edge). */
   depthOpacity: number;
+  /** Total pins in this venue cluster (1 = plain single pin). */
+  clusterCount: number;
+  /** Other pins in this cluster, primary first, for the expanded deck. */
+  clusterPins: RawPin[];
 }
 
 /** Render telemetry for the HUD (PINS: x/y in FOV). */
@@ -72,6 +111,8 @@ export interface OverlayStats {
   visiblePins: number;
   /** Pins dropped by the zero-hallucination gate. */
   rejectedPins: number;
+  /** Venue clusters currently on screen (one card per venue). */
+  venueCards: number;
 }
 
 export interface PlacardOverlayProps {
@@ -92,54 +133,41 @@ const HORIZON_Y_FRACTION = 0.42;
 const VERTICAL_SPREAD_FRACTION = 0.22;
 /** Half placard width used to keep the anchor card inside the viewport. */
 const HEDGE_MARGIN_PX = 72;
-/** "Same screen spot" bucket for stacking identical-place pins (px). */
-const STACK_BUCKET_PX = 48;
-/** Stacked-card pitch so identical-place placards cascade (px). */
-const STACK_PITCH_PX = 96;
+/** Collapsed venue card width (px, logical). */
+export const CARD_WIDTH_PX = 236;
+/** Collapsed venue card estimated height (px, logical). */
+export const CARD_HEIGHT_PX = 118;
+/** Expanded detail page height estimate (px, logical). */
+export const EXPANDED_PAGE_HEIGHT_PX = 188;
+/** Minimum vertical gap between any two venue cards (px, logical). */
+export const MIN_CARD_GAP_PX = 12;
 
 /** Clamp v into [lo, hi]. */
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** "42" -> "042", "7.4" -> "007" — fixed-width compass badge. */
-function formatBearing(bearingDeg: number): string {
-  const deg = Math.round(((bearingDeg % 360) + 360) % 360) % 360;
-  return `${String(deg).padStart(3, "0")}°`;
-}
-
-/** "142.3" -> "142 m", "1234" -> "1.2 km" — compact distance indicator. */
-function formatDistance(meters: number): string {
-  const m = Math.round(meters);
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
-}
-
 /** Kind/category tag text for the placard chip. */
 function kindLabel(kind: string): string {
-  switch (kind) {
-    case "event":
-      return "EVENT";
-    case "plan_stop":
-      return "PLAN";
-    default:
-      return "SAVED";
-  }
+  return KIND_LABELS[kind] ?? "SAVED";
 }
 
 /** Kind chip accent color — quick at-a-glance category coding. */
 function kindColor(kind: string): string {
-  switch (kind) {
-    case "event":
-      return "#f59e0b"; // amber
-    case "plan_stop":
-      return "#a78bfa"; // violet
-    default:
-      return "#34d399"; // emerald
-  }
+  return KIND_COLORS[kind] ?? "#34D399";
 }
 
 /**
- * Project + gate + cull the raw pins into renderable placards.
+ * Directions handoff URL (Apple Maps, walking mode). Opens the Maps app on
+ * device via the universal https link — no Info.plist query-scheme entry
+ * needed, and the link degrades to a browser map off-device.
+ */
+export function directionsUrl(pin: RawPin): string {
+  return `https://maps.apple.com/?daddr=${pin.lat},${pin.lng}&dirflg=w`;
+}
+
+/**
+ * Project + gate + cull the raw pins into renderable venue placards.
  * Pure: same inputs -> same layout, no side effects (React-friendly).
  */
 export function buildPlacards(
@@ -176,38 +204,18 @@ export function buildPlacards(
     .filter((entry) => entry.projected.visible === true)
     .sort((a, b) => a.projected.distanceM - b.projected.distanceM);
 
-  // 4. Screen pixel mapping + distance-based vertical placement.
+  // 4a. Screen pixel mapping + distance-based vertical placement.
   const horizonY = screenHeight * HORIZON_Y_FRACTION;
   const spread = screenHeight * VERTICAL_SPREAD_FRACTION;
 
-  // Simple collision stacking: pins sharing a screen spot (e.g. the four
-  // Mission Rec sessions at identical coords) cascade downward instead of
-  // stacking into an unreadable pile.
-  const occupied: Array<{ x: number; y: number }> = [];
-
-  const placed: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
+  const projected: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
     // Exact contract mapping: x = width * (screenXNorm * 0.5 + 0.5).
     const rawX = screenWidth * (projected.screenXNorm * 0.5 + 0.5);
     const screenX = clamp(rawX, HEDGE_MARGIN_PX, screenWidth - HEDGE_MARGIN_PX);
-
     const distanceNorm = clamp(projected.distanceM / MAX_RANGE_METERS, 0, 1);
-    let screenY = horizonY + (1 - distanceNorm) * spread; // near = lower, far = at horizon
-
-    for (const prev of occupied) {
-      if (
-        Math.abs(prev.x - screenX) < STACK_BUCKET_PX &&
-        Math.abs(prev.y - screenY) < STACK_BUCKET_PX
-      ) {
-        screenY += STACK_PITCH_PX;
-      }
-    }
-    occupied.push({ x: screenX, y: screenY });
-    screenY = clamp(screenY, 12, screenHeight - 96);
-
-    // 5. Depth styling: near pins larger and opaque, far pins smaller.
+    const screenY = horizonY + (1 - distanceNorm) * spread; // near = lower, far = at horizon
     const depthScale = 1.2 - 0.5 * distanceNorm; // 1.2 (near) -> 0.7 (far)
     const depthOpacity = 1.0 - 0.45 * distanceNorm; // 1.0 -> 0.55
-
     return {
       pin,
       screenX,
@@ -216,12 +224,337 @@ export function buildPlacards(
       bearingDeg: projected.bearingDeg,
       depthScale,
       depthOpacity,
+      clusterCount: 1,
+      clusterPins: [],
     };
   });
+
+  // 4b. Venue clustering: collapse same-venue pins (e.g. six Mission Rec
+  // sessions at identical coordinates) into one primary card with a
+  // "+N more activities" badge — no more overlapping card piles.
+  const placeGroups = groupByVenue(projected.map((p) => p.pin));
+  const byId = new Map(projected.map((p) => [p.pin.listing_id, p]));
+
+  const clustered: PlacedPlacard[] = placeGroups.flatMap((members) => {
+    const placedMembers = members
+      .map((m) => byId.get(m.listing_id))
+      .filter((m): m is PlacedPlacard => m !== undefined);
+    if (placedMembers.length === 0) return [];
+    const primary = pickPrimary(placedMembers);
+    return [withClusterSummary(primary, placedMembers)];
+  });
+
+  // 4c. Residual collision pass across DIFFERENT venues (same spot from
+  // this heading): guarantee minimum vertical spacing so cards never overlap.
+  const placed = resolveOverlaps(
+    clustered,
+    screenWidth,
+    screenHeight,
+    CARD_WIDTH_PX,
+    CARD_HEIGHT_PX,
+    MIN_CARD_GAP_PX,
+  );
 
   return { placed, rejected };
 }
 
+/** One deck per venue cluster; pages = primary first, then cluster members. */
+export interface DeckPage {
+  /** Cluster key == primary listing id. */
+  clusterId: string;
+  /** Primary placard (anchor of the cluster deck). */
+  primary: PlacedPlacard;
+  /** Pages: primary first, then remaining cluster members in pinned order. */
+  pages: PlacedPlacard[];
+}
+
+/** Build one deck per venue cluster (single-pin clusters get one page). */
+export function buildDecks(placed: PlacedPlacard[]): DeckPage[] {
+  return placed.map((primary) => ({
+    clusterId: primary.pin.listing_id,
+    primary,
+    pages: [
+      primary,
+      ...primary.clusterPins.map((pin) => ({
+        ...primary,
+        pin,
+        clusterCount: primary.clusterCount,
+        clusterPins: [],
+      })),
+    ],
+  }));
+}
+
+/* ------------------------------------------------------------------ chips */
+
+function KindChip({ kind }: { kind: string }) {
+  const color = kindColor(kind);
+  return (
+    <View style={[styles.kindChip, { backgroundColor: `${color}22`, borderColor: `${color}55` }]}>
+      <Text style={[styles.kindChipText, { color }]}>{kindLabel(kind)}</Text>
+    </View>
+  );
+}
+
+function BearingChip({ bearingDeg }: { bearingDeg: number }) {
+  return (
+    <View style={styles.bearingChip}>
+      <Text style={styles.bearingChipText}>{formatBearing(bearingDeg)}</Text>
+    </View>
+  );
+}
+
+function DistanceChip({ meters }: { meters: number }) {
+  return (
+    <View style={styles.distanceChip}>
+      <Text style={styles.distanceIcon}>◎</Text>
+      <Text style={styles.distanceText}>{formatDistance(meters)}</Text>
+    </View>
+  );
+}
+
+/* ----------------------------------------------------------------- cards */
+
+/** Collapsed single-venue card: chips row, title, distance + cluster badge. */
+function VenueCard({
+  placard,
+  onPress,
+}: {
+  placard: PlacedPlacard;
+  onPress: () => void;
+}) {
+  const moreCount = placard.clusterCount - 1;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${placard.pin.name}, ${formatDistance(placard.distanceM)} away${
+        moreCount > 0 ? `, plus ${moreCount} more activities` : ""
+      }`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={styles.cardTopRow}>
+        <KindChip kind={placard.pin.kind} />
+        <BearingChip bearingDeg={placard.bearingDeg} />
+      </View>
+      <Text style={styles.title} numberOfLines={2}>
+        {placard.pin.name}
+      </Text>
+      <View style={styles.cardBottomRow}>
+        <DistanceChip meters={placard.distanceM} />
+        {moreCount > 0 ? (
+          <View style={styles.moreBadge}>
+            <Text style={styles.moreBadgeText}>+{moreCount} more activities</Text>
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Expanded cluster page. Focused pages are NOT pressable (Directions and
+ * Close are separate sibling pressables — no nested-touchable double-fire);
+ * unfocused pages are pressable to focus.
+ */
+function DetailPage({
+  placard,
+  focused,
+  index,
+  total,
+  onPress,
+  onClose,
+}: {
+  placard: PlacedPlacard;
+  focused: boolean;
+  index: number;
+  total: number;
+  onPress: () => void;
+  onClose: () => void;
+}) {
+  const startsAt = formatStartsAt(placard.pin.starts_at);
+  const body = (
+    <>
+      <View style={styles.cardTopRow}>
+        <KindChip kind={placard.pin.kind} />
+        <BearingChip bearingDeg={placard.bearingDeg} />
+      </View>
+      <Text style={styles.title} numberOfLines={2}>
+        {placard.pin.name}
+      </Text>
+      {startsAt ? <Text style={styles.metaLine}>🗓 {startsAt}</Text> : null}
+      <View style={styles.cardBottomRow}>
+        <DistanceChip meters={placard.distanceM} />
+        <View style={styles.pageBadge}>
+          <Text style={styles.pageBadgeText}>
+            {index + 1}/{total}
+          </Text>
+        </View>
+      </View>
+    </>
+  );
+
+  if (!focused) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${placard.pin.name}, tap to focus`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.card, styles.cardExpanded, pressed && styles.cardPressed]}
+      >
+        {body}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={[styles.card, styles.cardExpanded, styles.cardFocused]}>
+      {body}
+      <View style={styles.actionsRow}>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Open walking directions in Maps"
+          hitSlop={6}
+          onPress={() => void Linking.openURL(directionsUrl(placard.pin))}
+          style={styles.directionsButton}
+        >
+          <Text style={styles.directionsButtonText}>Directions →</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close activity details"
+          hitSlop={6}
+          onPress={onClose}
+          style={styles.closeButton}
+        >
+          <Text style={styles.closeButtonText}>✕ Close</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.listingId}>ID {placard.pin.listing_id.slice(0, 8)}</Text>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ deck */
+
+/**
+ * VenueDeck — one interactive venue cluster.
+ *
+ * The deck window shows at most MAX_VISIBLE_STACK pages, ordered focused
+ * first (circular rotation), so large clusters stay fully on-screen.
+ * Screen position stays at the projected venue anchor in every state;
+ * pages stagger vertically below the anchor with STACK_GAP_PX pitch.
+ */
+function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
+
+  // Rig/heading changes re-project the anchor; keep the current page in range.
+  useEffect(() => {
+    if (focusIndex >= deck.pages.length) setFocusIndex(0);
+  }, [deck.pages.length, focusIndex]);
+
+  const anchor = deck.primary;
+  const cardWidth = expanded ? CARD_WIDTH_PX + 40 : CARD_WIDTH_PX;
+
+  // Hedge the anchor so the card stays fully on-screen.
+  const left = clamp(anchor.screenX, cardWidth / 2 + 8, screenWidth - cardWidth / 2 - 8);
+  const top = anchor.screenY;
+
+  if (!expanded) {
+    return (
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.anchorWrap,
+          {
+            left,
+            top,
+            opacity: anchor.depthOpacity,
+            transform: [{ translateX: -cardWidth / 2 }, { scale: anchor.depthScale }],
+          },
+        ]}
+      >
+        <VenueCard placard={anchor} onPress={() => { setFocusIndex(0); setExpanded(true); }} />
+      </View>
+    );
+  }
+
+  // Deck window: focused page first, then the remaining pages in circular
+  // order, capped at MAX_VISIBLE_STACK so tall clusters stay on-screen.
+  const ordered = [
+    ...deck.pages.slice(focusIndex),
+    ...deck.pages.slice(0, focusIndex),
+  ];
+  const windowPages = ordered.slice(0, MAX_VISIBLE_STACK);
+  const originalIndexOf = (page: PlacedPlacard): number =>
+    deck.pages.findIndex((p) => p.pin.listing_id === page.pin.listing_id);
+
+  return (
+    // Root fills the screen so the backdrop Pressable can catch taps anywhere
+    // outside the deck (tap-outside-to-collapse). Children are positioned in
+    // the same screen coordinate space.
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {/* Backdrop: tap anywhere outside the deck to collapse. */}
+      <Pressable
+        accessibilityLabel="Collapse venue details"
+        onPress={() => setExpanded(false)}
+        style={styles.backdrop}
+      />
+      {/* Focused page at the venue anchor — full opacity/scale regardless of
+          distance so the card being read is never attenuated. */}
+      <View
+        style={[
+          styles.anchorWrap,
+          {
+            left,
+            top,
+            opacity: 1,
+            transform: [{ translateX: -cardWidth / 2 }, { scale: 1 }],
+          },
+        ]}
+      >
+        <DetailPage
+          placard={windowPages[0]}
+          focused
+          index={originalIndexOf(windowPages[0])}
+          total={deck.pages.length}
+          onPress={() => setExpanded(false)}
+          onClose={() => setExpanded(false)}
+        />
+      </View>
+      {/* Remaining window pages staggered below (tap to focus). */}
+      {windowPages.slice(1).map((page, i) => (
+        <View
+          key={page.pin.listing_id}
+          style={[
+            styles.anchorWrap,
+            {
+              left,
+              top: top + (i + 1) * (EXPANDED_PAGE_HEIGHT_PX + STACK_GAP_PX),
+              opacity: 0.4,
+              transform: [{ translateX: -cardWidth / 2 }, { scale: 0.92 }],
+            },
+          ]}
+        >
+          <DetailPage
+            placard={page}
+            focused={false}
+            index={originalIndexOf(page)}
+            total={deck.pages.length}
+            onPress={() => setFocusIndex(originalIndexOf(page))}
+            onClose={() => setExpanded(false)}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Overlay root: gate → project → cluster → decks. Pure layout math lives in
+ * buildPlacards; each deck owns its own expanded/focus interaction state.
+ */
 export default function PlacardOverlay({
   pins,
   userPosition,
@@ -235,104 +568,156 @@ export default function PlacardOverlay({
     [pins, userPosition, userHeading, screenWidth, screenHeight],
   );
 
+  const decks = useMemo(() => buildDecks(placed), [placed]);
+
   useEffect(() => {
     onStats?.({
       totalPins: pins.length,
       visiblePins: placed.length,
       rejectedPins: rejected.length,
+      venueCards: decks.length,
     });
-  }, [onStats, pins.length, placed.length, rejected.length]);
+  }, [onStats, pins.length, placed.length, rejected.length, decks.length]);
 
-  if (placed.length === 0) return null;
+  if (decks.length === 0) return null;
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {placed.map((placard) => {
-        const kind = placard.pin.kind;
-        return (
-          <View
-            key={placard.pin.listing_id}
-            style={[
-              styles.placard,
-              {
-                left: placard.screenX,
-                top: placard.screenY,
-                opacity: placard.depthOpacity,
-                transform: [{ translateX: -HEDGE_MARGIN_PX }, { scale: placard.depthScale }],
-              },
-            ]}
-          >
-            <View style={styles.placardTopRow}>
-              <View style={[styles.kindTag, { backgroundColor: `${kindColor(kind)}33` }]}>
-                <Text style={[styles.kindTagText, { color: kindColor(kind) }]}>
-                  {kindLabel(kind)}
-                </Text>
-              </View>
-              <View style={styles.bearingBadge}>
-                <Text style={styles.bearingBadgeText}>{formatBearing(placard.bearingDeg)}</Text>
-              </View>
-            </View>
-            <Text style={styles.title} numberOfLines={2}>
-              {placard.pin.name}
-            </Text>
-            <View style={styles.bottomRow}>
-              <Text style={styles.distance}>{formatDistance(placard.distanceM)}</Text>
-              <Text style={styles.fovNote}>{HFOV_DEG}° FOV</Text>
-            </View>
-          </View>
-        );
-      })}
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {decks.map((deck) => (
+        <VenueDeck key={deck.clusterId} deck={deck} screenWidth={screenWidth} />
+      ))}
     </View>
   );
 }
 
+/* ---------------------------------------------------------------- styles */
+
 const styles = StyleSheet.create({
-  placard: {
+  anchorWrap: { position: "absolute" },
+  backdrop: {
     position: "absolute",
-    width: 216,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(8,15,30,0.82)",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  card: {
+    width: CARD_WIDTH_PX,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS,
+    backgroundColor: SURFACE_GLASS,
     borderWidth: 1,
-    borderColor: "rgba(125,211,252,0.35)",
+    borderColor: BORDER,
+    gap: 6,
     shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    // Subtle inner glow: brighter 1px top edge.
+    borderTopColor: "rgba(255,255,255,0.07)",
   },
-  placardTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+  cardFocused: {
+    borderColor: "rgba(255,107,71,0.6)",
+    shadowOpacity: 0.7,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
-  kindTag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
-  kindTagText: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  bearingBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    backgroundColor: "rgba(14,165,233,0.18)",
+  cardPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  cardExpanded: { width: CARD_WIDTH_PX + 40 },
+  cardTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  kindChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
   },
-  bearingBadgeText: {
-    color: "#7dd3fc",
+  kindChipText: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  bearingChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  bearingChipText: {
+    color: TEXT_SECONDARY,
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
-  title: { color: "#f1f5f9", fontSize: 12, fontWeight: "700", lineHeight: 15 },
-  bottomRow: {
+  title: { color: TEXT_PRIMARY, fontSize: 13, fontWeight: "700", lineHeight: 17 },
+  metaLine: { color: TEXT_SECONDARY, fontSize: 10, fontWeight: "600" },
+  cardBottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 5,
   },
-  distance: {
-    color: "#a5f3fc",
+  distanceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  distanceIcon: { color: TEXT_SECONDARY, fontSize: 10, lineHeight: 12 },
+  distanceText: {
+    color: TEXT_PRIMARY,
     fontSize: 11,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
   },
-  fovNote: { color: "#475569", fontSize: 9, fontWeight: "600" },
+  moreBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: CORAL_TINT,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,71,0.45)",
+  },
+  moreBadgeText: { color: ACCENT_CORAL, fontSize: 9, fontWeight: "800" },
+  pageBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  pageBadgeText: {
+    color: TEXT_SECONDARY,
+    fontSize: 9,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingTop: 8,
+  },
+  directionsButton: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: CORAL_TINT,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,71,0.5)",
+  },
+  directionsButtonText: { color: ACCENT_CORAL, fontSize: 11, fontWeight: "800" },
+  closeButton: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  closeButtonText: { color: TEXT_SECONDARY, fontSize: 11, fontWeight: "700" },
+  listingId: {
+    color: TEXT_SECONDARY,
+    fontSize: 9,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+  },
 });
