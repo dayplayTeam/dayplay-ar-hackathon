@@ -13,7 +13,7 @@
  * so this is the value fed to the frustum delta calculation.
  */
 
-import type { LatLng } from './distance';
+import type { LatLng } from './distance.ts';
 
 const TO_RAD = Math.PI / 180;
 const TO_DEG = 180 / Math.PI;

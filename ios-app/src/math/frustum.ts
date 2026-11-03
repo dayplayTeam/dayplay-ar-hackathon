@@ -19,9 +19,9 @@
  * zero-hallucination gate (`zero_hallucination_gate.ts`).
  */
 
-import { bearingDeg } from './bearing';
-import { distanceMeters } from './distance';
-import type { LatLng } from './distance';
+import { bearingDeg } from './bearing.ts';
+import { distanceMeters } from './distance.ts';
+import type { LatLng } from './distance.ts';
 
 /** Horizontal field of view of the AR camera view, in degrees. */
 export const HFOV_DEG = 62;

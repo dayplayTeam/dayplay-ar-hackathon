@@ -21,8 +21,8 @@
  *   - `kind` in {saved, event, plan_stop}
  */
 
-import { distanceMeters } from './distance';
-import type { LatLng, GateReason, GateResult, SpatialPin, ValidatedPin } from './internal';
+import { distanceMeters } from './distance.ts';
+import type { LatLng, GateReason, GateResult, SpatialPin, ValidatedPin } from './internal.ts';
 
 /** Default maximum render range in meters. */
 export const MAX_RANGE_METERS = 500.0;

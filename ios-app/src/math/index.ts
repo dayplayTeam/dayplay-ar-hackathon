@@ -31,7 +31,7 @@ export {
   validatePin,
   validatePins,
   isValidatedPin,
-} from './internal';
+} from './internal.ts';
 export type {
   LatLng,
   SpatialPin,
@@ -41,4 +41,4 @@ export type {
   HeadingDeg,
   ScreenXNorm,
   DeltaDeg,
-} from './internal';
+} from './internal.ts';
