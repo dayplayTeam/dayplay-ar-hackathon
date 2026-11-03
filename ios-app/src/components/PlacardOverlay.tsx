@@ -223,7 +223,6 @@ export function buildPlacards(
   // 4a. Screen pixel mapping + distance-based vertical placement.
   // Landscape phones (~800-930 x ~390-430px): horizon sits a touch lower and
   // the near-pin band compresses so cards never clip off the short bottom edge.
-  const isLandscape = screenWidth > screenHeight;
   const horizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
   const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
   // Hard on-screen clamp: a card anchor can never sit below the viewport
@@ -580,7 +579,7 @@ function VenueDeck({
           style={[
             styles.anchorWrap,
             {
-              left,
+              left: leftFinal,
               top: Math.min(
                 Math.max(12, screenHeight - EXPANDED_PAGE_HEIGHT_PX - 8),
                 top + (i + 1) * stackPitch,

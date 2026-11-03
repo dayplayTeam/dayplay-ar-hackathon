@@ -14,7 +14,8 @@
  */
 
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   ACCENT_CORAL,
@@ -89,10 +90,18 @@ export default function HudBar({
   rig,
 }: HudBarProps) {
   const live = rig.ready;
+  // Landscape: the phone rotates on the fly, so re-read the window each render
+  // and respect the left/right notch + Dynamic Island safe-area insets.
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
 
   if (hudMode === "minimized") {
     return (
-      <View pointerEvents="box-none" style={styles.minimizedWrap}>
+      <View
+        pointerEvents="box-none"
+        style={[styles.minimizedWrap, { paddingRight: 4 + Math.max(insets.right, 0) }]}
+      >
         <Pressable
           accessibilityLabel="Show AR HUD"
           accessibilityRole="button"
@@ -113,9 +122,16 @@ export default function HudBar({
   const compassLabel = heading !== null ? formatHeadingCardinal(heading) : "---° --";
   const modeLabel = anchorToSf ? "SF ANCHOR" : "LIVE GPS";
 
+  // Landscape strip: pills stay in ONE horizontal row (they already are), but
+  // the row must clear the left/right notch insets and not crowd the wider
+  // viewport's center. Wider side padding keeps the camera center clear.
+  const wrapStyle = isLandscape
+    ? [styles.wrap, { paddingHorizontal: Math.max(insets.left, insets.right) }]
+    : styles.wrap;
+
   return (
-    <View pointerEvents="box-none" style={styles.wrap}>
-      <View style={styles.bar}>
+    <View pointerEvents="box-none" style={wrapStyle}>
+      <View style={[styles.bar, isLandscape ? styles.barLandscape : null]}>
         {/* Compass chip — heading + cardinal sector. */}
         <View style={styles.compassChip}>
           <Text style={styles.compassText}>{compassLabel}</Text>
@@ -182,7 +198,7 @@ export default function HudBar({
 
       {/* Expanded telemetry panel — drops below the pill bar on demand. */}
       {hudMode === "expanded" ? (
-        <View style={styles.panel}>
+        <View style={[styles.panel, isLandscape ? styles.panelLandscape : null]}>
           <View style={styles.panelRow}>
             <Text style={styles.panelLabel}>GPS</Text>
             <StatusDot ok={rig.gpsOk} />
@@ -234,6 +250,12 @@ export default function HudBar({
 
 const styles = StyleSheet.create({
   wrap: { alignItems: "center" },
+  /** Landscape: slightly tighter pill paddings/typography so the single
+   * strip stays compact on the wide-but-short viewport. */
+  barLandscape: {
+    gap: 5,
+    paddingVertical: 4,
+  },
   bar: {
     flexDirection: "row",
     alignItems: "center",
@@ -300,6 +322,7 @@ const styles = StyleSheet.create({
   minimizeGlyph: { color: TEXT_SECONDARY, fontSize: 9, lineHeight: 12 },
   dotOk: { backgroundColor: ACCENT_CORAL },
   dotWarn: { backgroundColor: "rgba(234,179,8,0.9)" },
+  panelLandscape: { alignSelf: "center", maxWidth: 420 },
   panel: {
     marginTop: 6,
     paddingHorizontal: 12,

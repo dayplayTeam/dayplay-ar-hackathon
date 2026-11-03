@@ -21,8 +21,10 @@ import {
   TextInput,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   ACCENT_CORAL,
@@ -78,17 +80,20 @@ const Chip = memo(function Chip({
   label,
   active,
   onPress,
+  compact = false,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  /** Landscape: tighter chip paddings for the compact bottom bar. */
+  compact?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[styles.chip, active ? styles.chipActive : null]}
+      style={[styles.chip, compact ? styles.chipCompact : null, active ? styles.chipActive : null]}
     >
       <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>
         {label}
@@ -111,12 +116,22 @@ export default function InputFilterBar({
   initialQuery = "ai marketing meetups this week",
 }: InputFilterBarProps) {
   const [localQuery, setLocalQuery] = useState(searchQuery || initialQuery);
+  // Landscape: rotation happens on the fly — re-read the window each render.
+  // The bar stays sleek + compact and clears the home indicator / rounded
+  // screen corners via the horizontal safe-area insets.
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const sideInset = isLandscape ? Math.max(insets.left, insets.right) : 0;
 
   if (hidden) return null;
 
   if (collapsed) {
     return (
-      <View pointerEvents="box-none" style={styles.collapsedWrap}>
+      <View
+        pointerEvents="box-none"
+        style={[styles.collapsedWrap, { left: 16 + sideInset, right: 16 + sideInset }]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Expand search and filters"
@@ -132,8 +147,8 @@ export default function InputFilterBar({
   const submit = () => onSubmitQuery(localQuery.trim());
 
   return (
-    <View pointerEvents="box-none" style={styles.wrap}>
-      <View style={styles.bar}>
+    <View pointerEvents="box-none" style={[styles.wrap, { left: 12 + sideInset, right: 12 + sideInset }]}>
+      <View style={[styles.bar, isLandscape ? styles.barCompact : null]}>
         {/* Search row */}
         <View style={styles.inputRow}>
           <Text style={styles.searchIcon}>🔍</Text>
@@ -189,6 +204,7 @@ export default function InputFilterBar({
               label={chip}
               active={activeChip === chip}
               onPress={() => onSelectChip(activeChip === chip ? null : chip)}
+              compact={isLandscape}
             />
           ))}
         </ScrollView>
@@ -203,6 +219,13 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     bottom: 12,
+  },
+  /** Landscape: sleek + compact — shorter paddings and smaller type so the
+   * bottom bar blocks as little of the short landscape viewport as possible. */
+  barCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 5,
   },
   bar: {
     backgroundColor: SURFACE_BAR,
@@ -243,6 +266,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
+  },
+  chipCompact: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
   chip: {
     backgroundColor: CHIP_IDLE_BG,

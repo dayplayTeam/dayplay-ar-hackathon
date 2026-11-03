@@ -91,6 +91,10 @@ export function resolveOverlaps(
   cardWidth: number,
   estimatedCardHeight: number,
   minGapPx: number,
+  /** Bottom chrome (input bar + home indicator) reserved, px. Portrait
+   * callers default to 96; landscape passes a smaller value because the
+   * compact bottom bar leaves more of the short viewport usable. */
+  bottomChromePx: number = 96,
 ): PlacedPlacard[] {
   // Sort by screenY so lower cards (nearer horizon) claim space first.
   const sorted = [...placards].sort((a, b) => a.screenY - b.screenY);
@@ -106,7 +110,7 @@ export function resolveOverlaps(
       }
     }
     // Keep the card fully on screen.
-    const maxY = screenHeight - estimatedCardHeight - 96; // 96 px bottom chrome
+    const maxY = screenHeight - estimatedCardHeight - bottomChromePx;
     adjusted.push({ ...card, screenY: Math.min(Math.max(12, y), Math.max(12, maxY)) });
   }
   return adjusted.sort((a, b) => a.screenY - b.screenY);

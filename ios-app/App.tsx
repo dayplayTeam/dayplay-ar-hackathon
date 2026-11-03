@@ -77,6 +77,9 @@ function ArCameraScreen() {
   setRigRef.current = setRig;
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // Landscape support: the phone can rotate on the fly (app.json orientation
+  // "default"), so every frame re-derives the orientation from the window.
+  const isLandscape = screenWidth > screenHeight;
 
   // M2 pin state: "demo" = bundled 12 verified corridor fixtures;
   // "live" = ${API_URL}/pins?source=real (falls back to demo offline).
@@ -278,7 +281,17 @@ function ArCameraScreen() {
 
       {/* Top HUD: compact pill bar (standard) / telemetry panel (expanded)
           / near-invisible dot (minimized = REC VIEW equivalent). */}
-      <View pointerEvents="box-none" style={[styles.hudWrap, { top: insets.top + 8 }]}>
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.hudWrap,
+          {
+            top: insets.top + 8,
+            left: 16 + (isLandscape ? insets.left : 0),
+            right: 16 + (isLandscape ? insets.right : 0),
+          },
+        ]}
+      >
         <HudBar
           heading={rig.heading}
           headingAccuracy={rig.headingAccuracy}
@@ -306,13 +319,24 @@ function ArCameraScreen() {
 
       {/* Intent fallback banner — shown when a query maps to demo pins. */}
       {intentBanner ? (
-        <View pointerEvents="none" style={styles.intentBanner}>
+        <View
+          pointerEvents="none"
+          style={[styles.intentBanner, isLandscape ? styles.intentBannerLandscape : null]}
+        >
           <Text style={styles.intentBannerText}>{intentBanner}</Text>
         </View>
       ) : null}
 
       {/* Bottom input bar + quick intent chips. Hidden entirely in REC VIEW. */}
-      <View pointerEvents="box-none" style={{ bottom: insets.bottom + 8, position: "absolute", left: 0, right: 0 }}>
+      <View
+        pointerEvents="box-none"
+        style={{
+          bottom: insets.bottom + (isLandscape ? 4 : 8),
+          position: "absolute",
+          left: 0,
+          right: 0,
+        }}
+      >
         <InputFilterBar
           activeChip={activeChip}
           searchQuery={searchQuery}
@@ -427,6 +451,7 @@ const styles = StyleSheet.create({
     bottom: 128,
     alignItems: "center",
   },
+  intentBannerLandscape: { bottom: 100 },
   intentBannerText: {
     color: "#F5F4F2",
     fontSize: 12,
