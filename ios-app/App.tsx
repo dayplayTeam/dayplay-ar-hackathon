@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
+import PlacardOverlay, { type OverlayStats } from "./src/components/PlacardOverlay.tsx";
+import { CORRIDOR_REAL_FIXTURES, fetchRealPins, type PinSource } from "./src/data/pinsClient.ts";
 
 /** Live telemetry from the phone's GPS + compass rig. */
 type Rig = {
@@ -59,6 +61,47 @@ function ArCameraScreen() {
   const [showCamera, setShowCamera] = useState(true);
   const setRigRef = useRef(setRig);
   setRigRef.current = setRig;
+
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // M2 pin state: "demo" = bundled 12 verified corridor fixtures;
+  // "live" = ${API_URL}/pins?source=real (falls back to demo offline).
+  const [pinSource, setPinSource] = useState<PinSource>("demo");
+  const [pins, setPins] = useState(CORRIDOR_REAL_FIXTURES);
+  const [pinSourceNote, setPinSourceNote] = useState<string | null>(null);
+  const [overlayStats, setOverlayStats] = useState<OverlayStats | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchRealPins().then((result) => {
+      if (cancelled) return;
+      setPins(result.pins);
+      setPinSource(result.source);
+      setPinSourceNote(result.error); // null on success, error string on fallback
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const togglePinSource = useCallback(() => {
+    if (pinSource === "demo") {
+      setPinSource("live");
+      void fetchRealPins().then((result) => {
+        setPins(result.pins);
+        setPinSource(result.source);
+        setPinSourceNote(result.error); // failed live fetch silently reverts to demo data
+      });
+    } else {
+      setPinSource("demo");
+      setPins(CORRIDOR_REAL_FIXTURES);
+      setPinSourceNote(null);
+    }
+  }, [pinSource]);
+
+  const onOverlayStats = useCallback((stats: OverlayStats) => {
+    setOverlayStats(stats);
+  }, []);
 
   const startSensors = useCallback(async () => {
     // GPS rig: continuous foreground updates at high accuracy.
@@ -160,6 +203,20 @@ function ArCameraScreen() {
         <CameraView style={StyleSheet.absoluteFill} facing="back" active />
       ) : null}
 
+      {/* M2 floating spatial placards — gate + frustum math in src/math */}
+      <PlacardOverlay
+        pins={pins}
+        userPosition={
+          rig.latitude !== null && rig.longitude !== null
+            ? { latitude: rig.latitude, longitude: rig.longitude, accuracy: rig.accuracy }
+            : null
+        }
+        userHeading={rig.heading}
+        screenWidth={screenWidth}
+        screenHeight={screenHeight}
+        onStats={onOverlayStats}
+      />
+
       {/* Top HUD: GPS + heading telemetry */}
       <View style={[styles.hud, { top: insets.top + 8 }]}>
         <Text style={styles.hudTitle}>AR RIG · LIVE</Text>
@@ -195,6 +252,35 @@ function ArCameraScreen() {
         <View style={styles.hudRow}>
           <Text style={styles.hudLabel}>RIG</Text>
           <StatusPill ok={rigReady(rig)} label={rigReady(rig) ? "ready" : "warming"} />
+        </View>
+        <View style={styles.hudRow}>
+          <Text style={styles.hudLabel}>PINS</Text>
+          <Text style={styles.hudValue}>
+            {overlayStats
+              ? `${overlayStats.visiblePins}/${overlayStats.totalPins} in ${62}° FOV`
+              : "--"}
+            {overlayStats && overlayStats.rejectedPins > 0
+              ? ` (${overlayStats.rejectedPins} gated)`
+              : ""}
+          </Text>
+        </View>
+        <View style={styles.hudRow}>
+          <Text style={styles.hudLabel}>SRC</Text>
+          <StatusPill
+            ok={pinSource === "live"}
+            label={
+              pinSource === "live"
+                ? "LIVE API"
+                : pinSourceNote
+                  ? `DEMO (${pinSourceNote})`
+                  : "DEMO"
+            }
+          />
+          <Pressable onPress={togglePinSource} hitSlop={8} style={styles.toggleButton}>
+            <Text style={styles.toggleText}>
+              {pinSource === "demo" ? "TRY LIVE API" : "DEMO PINS"}
+            </Text>
+          </Pressable>
         </View>
         {rig.error ? <Text style={styles.hudError}>{rig.error}</Text> : null}
       </View>
@@ -262,6 +348,16 @@ const styles = StyleSheet.create({
   pillOk: { backgroundColor: "rgba(34,197,94,0.25)" },
   pillWarn: { backgroundColor: "rgba(234,179,8,0.25)" },
   pillText: { color: "#e2e8f0", fontSize: 10, fontWeight: "700" },
+  toggleButton: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "rgba(14,165,233,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(14,165,233,0.4)",
+    overflow: "hidden",
+  },
+  toggleText: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
   centerNotice: {
     position: "absolute",
     top: 0,
