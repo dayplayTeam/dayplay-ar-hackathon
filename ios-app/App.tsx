@@ -20,6 +20,17 @@ type Rig = {
   error: string | null;
 };
 
+
+/** SF Mission corridor anchor point (Valencia St corridor).
+ * Used when 'Anchor to SF' is enabled so testers anywhere can experience 
+ * live 360° True North heading tracking against real corridor pins.
+ */
+const SF_MISSION_ANCHOR = {
+  latitude: 37.758150,
+  longitude: -122.417930,
+  accuracy: 5.0,
+};
+
 const INITIAL_RIG: Rig = {
   latitude: null,
   longitude: null,
@@ -70,6 +81,8 @@ function ArCameraScreen() {
   const [pins, setPins] = useState(CORRIDOR_REAL_FIXTURES);
   const [pinSourceNote, setPinSourceNote] = useState<string | null>(null);
   const [overlayStats, setOverlayStats] = useState<OverlayStats | null>(null);
+  const [anchorToSf, setAnchorToSf] = useState<boolean>(true);
+  const [cleanView, setCleanView] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,13 +216,15 @@ function ArCameraScreen() {
         <CameraView style={StyleSheet.absoluteFill} facing="back" active />
       ) : null}
 
-      {/* M2 floating spatial placards — gate + frustum math in src/math */}
+      {/* M2/M3 floating spatial placards — gate + frustum math in src/math */}
       <PlacardOverlay
         pins={pins}
         userPosition={
-          rig.latitude !== null && rig.longitude !== null
-            ? { latitude: rig.latitude, longitude: rig.longitude, accuracy: rig.accuracy }
-            : null
+          anchorToSf
+            ? SF_MISSION_ANCHOR
+            : rig.latitude !== null && rig.longitude !== null
+              ? { latitude: rig.latitude, longitude: rig.longitude, accuracy: rig.accuracy }
+              : null
         }
         userHeading={rig.heading}
         screenWidth={screenWidth}
@@ -217,8 +232,16 @@ function ArCameraScreen() {
         onStats={onOverlayStats}
       />
 
-      {/* Top HUD: GPS + heading telemetry */}
-      <View style={[styles.hud, { top: insets.top + 8 }]}>
+      {/* Top HUD: GPS + heading telemetry (can be minimized for clean recording) */}
+      {cleanView ? (
+        <Pressable
+          onPress={() => setCleanView(false)}
+          style={[styles.cleanViewBadge, { top: insets.top + 8 }]}
+        >
+          <Text style={styles.cleanViewBadgeText}>AR ACTIVE · TAP TO SHOW HUD</Text>
+        </Pressable>
+      ) : (
+        <View style={[styles.hud, { top: insets.top + 8 }]}>
         <Text style={styles.hudTitle}>AR RIG · LIVE</Text>
         <View style={styles.hudRow}>
           <Text style={styles.hudLabel}>LAT</Text>
@@ -282,8 +305,21 @@ function ArCameraScreen() {
             </Text>
           </Pressable>
         </View>
+        <View style={styles.hudRow}>
+          <Text style={styles.hudLabel}>MODE</Text>
+          <StatusPill ok={anchorToSf} label={anchorToSf ? "SF ANCHOR (DEMO)" : "LIVE GPS"} />
+          <Pressable onPress={() => setAnchorToSf((prev) => !prev)} hitSlop={8} style={styles.toggleButton}>
+            <Text style={styles.toggleText}>
+              {anchorToSf ? "USE DEVICE GPS" : "ANCHOR TO SF"}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => setCleanView(true)} hitSlop={8} style={[styles.toggleButton, styles.recButton]}>
+            <Text style={styles.recText}>REC VIEW</Text>
+          </Pressable>
+        </View>
         {rig.error ? <Text style={styles.hudError}>{rig.error}</Text> : null}
       </View>
+      )}
 
       {!cameraGranted ? (
         <PermissionPanel status={cameraPermission?.status ?? "undetermined"} onRequest={() => void requestCameraPermission()} />
@@ -358,6 +394,22 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   toggleText: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
+  recButton: {
+    backgroundColor: "rgba(239,68,68,0.25)",
+    borderColor: "rgba(239,68,68,0.5)",
+  },
+  recText: { color: "#fca5a5", fontSize: 10, fontWeight: "800" },
+  cleanViewBadge: {
+    position: "absolute",
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  cleanViewBadgeText: { color: "#38bdf8", fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
   centerNotice: {
     position: "absolute",
     top: 0,
