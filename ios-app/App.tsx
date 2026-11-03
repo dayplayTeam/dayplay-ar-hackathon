@@ -6,6 +6,8 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import PlacardOverlay, { type OverlayStats } from "./src/components/PlacardOverlay.tsx";
 import HudBar, { type HudBarProps } from "./src/components/HudBar.tsx";
+import InputFilterBar from "./src/components/InputFilterBar.tsx";
+import type { RawPin } from "./src/components/PlacardOverlay.tsx";
 import { CORRIDOR_REAL_FIXTURES, fetchRealPins, type PinSource } from "./src/data/pinsClient.ts";
 
 /** Live telemetry from the phone's GPS + compass rig. */
@@ -87,6 +89,14 @@ function ArCameraScreen() {
   // near-invisible dot (REC VIEW equivalent) for a clean camera viewport.
   const [hudMode, setHudMode] = useState<HudBarProps["hudMode"]>("standard");
 
+  // Quick intent filter state (InputFilterBar).
+  const [activeChip, setActiveChip] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("ai marketing meetups this week");
+  const [submittedQuery, setSubmittedQuery] = useState("ai marketing meetups this week");
+  const [barCollapsed, setBarCollapsed] = useState(false);
+  // REC VIEW: hudMode "minimized" hides the input bar for a pristine camera viewport.
+  const recView = hudMode === "minimized";
+
   useEffect(() => {
     let cancelled = false;
     void fetchRealPins().then((result) => {
@@ -118,6 +128,36 @@ function ArCameraScreen() {
   const onOverlayStats = useCallback((stats: OverlayStats) => {
     setOverlayStats(stats);
   }, []);
+
+  const onSelectChip = useCallback((chip: string | null) => {
+    setActiveChip(chip);
+  }, []);
+
+  const onChangeSearchQuery = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  const onSubmitQuery = useCallback((query: string) => {
+    setSearchQuery(query);
+    setSubmittedQuery(query);
+  }, []);
+
+  const onClearFilter = useCallback(() => {
+    setSearchQuery("");
+    setSubmittedQuery("");
+    setActiveChip(null);
+  }, []);
+
+  const onExpandBar = useCallback(() => setBarCollapsed(false), []);
+
+  // Client-side intent filtering: chips + free-text keywords narrow the
+  // pins handed to the placard overlay; unmatched queries fall back to the
+  // primary demo pins with an intent banner.
+  const filtered = filterPins(pins, activeChip, submittedQuery);
+  const intentBanner =
+    filtered.fellBack && submittedQuery.trim().length > 0
+      ? `Intent: "${submittedQuery.trim()}" (${filtered.pins.length} pins mapped)`
+      : null;
 
   const startSensors = useCallback(async () => {
     // GPS rig: continuous foreground updates at high accuracy.
@@ -221,7 +261,7 @@ function ArCameraScreen() {
 
       {/* M2/M3 floating spatial placards — gate + frustum math in src/math */}
       <PlacardOverlay
-        pins={pins}
+        pins={filtered.pins}
         userPosition={
           anchorToSf
             ? SF_MISSION_ANCHOR
@@ -263,6 +303,28 @@ function ArCameraScreen() {
         />
       </View>
 
+      {/* Intent fallback banner — shown when a query maps to demo pins. */}
+      {intentBanner ? (
+        <View pointerEvents="none" style={styles.intentBanner}>
+          <Text style={styles.intentBannerText}>{intentBanner}</Text>
+        </View>
+      ) : null}
+
+      {/* Bottom input bar + quick intent chips. Hidden entirely in REC VIEW. */}
+      <View pointerEvents="box-none" style={{ bottom: insets.bottom + 8, position: "absolute", left: 0, right: 0 }}>
+        <InputFilterBar
+          activeChip={activeChip}
+          searchQuery={searchQuery}
+          onSelectChip={onSelectChip}
+          onChangeSearchQuery={onChangeSearchQuery}
+          onSubmitQuery={onSubmitQuery}
+          onClearFilter={onClearFilter}
+          resultCount={filtered.pins.length}
+          hidden={recView}
+          collapsed={barCollapsed}
+          onExpand={onExpandBar}
+        />
+      </View>
       {!cameraGranted ? (
         <PermissionPanel status={cameraPermission?.status ?? "undetermined"} onRequest={() => void requestCameraPermission()} />
       ) : null}
@@ -297,6 +359,47 @@ function PermissionPanel({ status, onRequest }: { status: string; onRequest: () 
   );
 }
 
+/** Tokenizes a free-text query into lowercase keywords (len>=3, no stop words). */
+function queryKeywords(query: string): string[] {
+  return query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && t !== "the" && t !== "and" && t !== "for");
+}
+
+const CHIP_KEYWORDS: Record<string, string[]> = {
+  "live now": ["live", "now"],
+  "today": ["today"],
+  "weekend": ["weekend"],
+  "coffee": ["coffee", "cowork"],
+  "nightlife": ["nightlife", "lounge", "bar"],
+};
+
+/**
+ * Client-side intent filter for the M1 input bar: chip / keyword match on
+ * pin name + kind. When nothing matches a non-empty query, fall back to
+ * the demo intent pins so the demo always shows relevant pins.
+ */
+function filterPins(pins: RawPin[], chip: string | null, query: string): { pins: RawPin[]; fellBack: boolean } {
+  const keywords = queryKeywords(query);
+  const chipKey = chip ? chip.toLowerCase() : "";
+  const chipTerms = Object.entries(CHIP_KEYWORDS).find(([k]) => chipKey.includes(k))?.[1] ?? [];
+  const terms = [...new Set([...chipTerms, ...keywords])];
+  if (terms.length === 0) return { pins, fellBack: false };
+
+  const matched = pins.filter((pin) => {
+    const name = pin.name.toLowerCase();
+    const kind = pin.kind.toLowerCase();
+    return terms.some((t) => name.includes(t) || kind.includes(t));
+  });
+  if (matched.length > 0 || keywords.length === 0) {
+    return { pins: matched, fellBack: false };
+  }
+  // No keyword matches — surface the primary demo pins (first 3 fixtures).
+  return { pins: pins.slice(0, 3), fellBack: true };
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
   container: { flex: 1, backgroundColor: "#000" },
@@ -316,6 +419,25 @@ const styles = StyleSheet.create({
   centerNoticeTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
   centerNoticeText: { color: "#cbd5e1", textAlign: "center", fontSize: 13 },
   centerNoticeFootnote: { color: "#64748b", fontSize: 11, textAlign: "center", marginTop: 4 },
+  intentBanner: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 128,
+    alignItems: "center",
+  },
+  intentBannerText: {
+    color: "#F5F4F2",
+    fontSize: 12,
+    fontWeight: "700",
+    backgroundColor: "rgba(28,27,26,0.88)",
+    borderColor: "#2A2826",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    overflow: "hidden",
+  },
   permissionButton: {
     color: "#0ea5e9",
     fontWeight: "700",
