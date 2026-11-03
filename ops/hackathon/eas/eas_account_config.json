@@ -1,0 +1,58 @@
+{
+  "source_repo": "dayplay",
+  "eas_project_id": "429c510f-cead-4568-895d-285a6b7bbcb7",
+  "bundle_identifier": "com.dayplay.app",
+  "app_name": "Swipely",
+  "slug": "swipely-app",
+  "owner": "dayplay",
+  "eas_json": {
+    "cli": {
+      "version": ">= 11.0.0",
+      "appVersionSource": "remote"
+    },
+    "build": {
+      "development": {
+        "env": {
+          "EXPO_PUBLIC_SUPABASE_URL": "https://snpnyihxhjvdxvodgaqh.supabase.co",
+          "EXPO_PUBLIC_SUPABASE_FORCE_PRIMARY": "true"
+        },
+        "developmentClient": true,
+        "distribution": "internal"
+      },
+      "preview": {
+        "env": {
+          "EXPO_PUBLIC_SUPABASE_URL": "https://snpnyihxhjvdxvodgaqh.supabase.co",
+          "EXPO_PUBLIC_SUPABASE_FORCE_PRIMARY": "true"
+        },
+        "distribution": "internal"
+      },
+      "internal": {
+        "env": {
+          "EXPO_PUBLIC_SUPABASE_URL": "https://snpnyihxhjvdxvodgaqh.supabase.co",
+          "EXPO_PUBLIC_SUPABASE_FORCE_PRIMARY": "true"
+        },
+        "distribution": "internal",
+        "ios": {
+          "resourceClass": "m-medium"
+        },
+        "android": {
+          "gradleCommand": ":app:assembleRelease"
+        }
+      },
+      "production": {
+        "env": {
+          "EXPO_PUBLIC_SUPABASE_URL": "https://snpnyihxhjvdxvodgaqh.supabase.co",
+          "EXPO_PUBLIC_SUPABASE_FORCE_PRIMARY": "true"
+        },
+        "autoIncrement": true
+      }
+    },
+    "submit": {
+      "production": {
+        "ios": {
+          "ascAppId": "6755804676"
+        }
+      }
+    }
+  }
+}

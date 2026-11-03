@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Swipely",
+    "slug": "swipely-app",
+    "owner": "dayplay",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dayplay.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera access is required for the AR street view overlay.",
+        "NSLocationWhenInUseUsageDescription": "Location and compass access are required to place AR pins on real-world venues."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "429c510f-cead-4568-895d-285a6b7bbcb7"
+      }
+    }
+  }
+}
