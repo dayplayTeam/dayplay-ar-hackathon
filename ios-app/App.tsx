@@ -272,6 +272,7 @@ function ArCameraScreen() {
         userHeading={rig.heading}
         screenWidth={screenWidth}
         screenHeight={screenHeight}
+        isLandscape={screenWidth > screenHeight}
         onStats={onOverlayStats}
       />
 

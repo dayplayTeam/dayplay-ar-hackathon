@@ -117,6 +117,7 @@ export interface OverlayStats {
 
 export interface PlacardOverlayProps {
   pins: RawPin[];
+  isLandscape?: boolean;
   /** Live GPS fix; null until watchPositionAsync has locked. */
   userPosition: UserPosition | null;
   /** True-North heading in degrees [0, 360), or null until compass locks. */
@@ -127,10 +128,24 @@ export interface PlacardOverlayProps {
   onStats?: (stats: OverlayStats) => void;
 }
 
-/** Center horizon line as a fraction of screen height (Y of the horizon). */
-const HORIZON_Y_FRACTION = 0.42;
-/** Vertical spread below the horizon for near pins (fraction of height). */
-const VERTICAL_SPREAD_FRACTION = 0.22;
+/** Center horizon line as a fraction of screen height — portrait (Y of the horizon). */
+const HORIZON_Y_FRACTION_PORTRAIT = 0.42;
+/** Landscape screens are shorter (~390-430px): drop the horizon slightly
+ * lower so the wider FOV band still has usable vertical room below it. */
+const HORIZON_Y_FRACTION_LANDSCAPE = 0.45;
+/** Vertical spread below the horizon for near pins (fraction of height) — portrait. */
+const VERTICAL_SPREAD_FRACTION_PORTRAIT = 0.22;
+/** Landscape: smaller vertical pitch so the pin band fits the short height
+ * without cards clipping off the bottom. */
+const VERTICAL_SPREAD_FRACTION_LANDSCAPE = 0.16;
+/** Gap between staggered expanded pages in landscape (smaller pitch). */
+const STACK_GAP_PX_LANDSCAPE = 6;
+/** Bottom chrome (input bar + home indicator) reserved in portrait. */
+const BOTTOM_CHROME_PX_PORTRAIT = 96;
+/** Landscape bottom chrome is shorter — the compact input bar leaves more room. */
+const BOTTOM_CHROME_PX_LANDSCAPE = 56;
+/** Max cluster pages rendered when expanded — landscape (short height fits 2). */
+const MAX_VISIBLE_STACK_LANDSCAPE = 2;
 /** Half placard width used to keep the anchor card inside the viewport. */
 const HEDGE_MARGIN_PX = 72;
 /** Collapsed venue card width (px, logical). */
@@ -176,6 +191,7 @@ export function buildPlacards(
   userHeading: number | null,
   screenWidth: number,
   screenHeight: number,
+  isLandscape: boolean = false,
 ): { placed: PlacedPlacard[]; rejected: Array<{ index: number; reason: GateReason }> } {
   const rejected: Array<{ index: number; reason: GateReason }> = [];
 
@@ -205,15 +221,22 @@ export function buildPlacards(
     .sort((a, b) => a.projected.distanceM - b.projected.distanceM);
 
   // 4a. Screen pixel mapping + distance-based vertical placement.
-  const horizonY = screenHeight * HORIZON_Y_FRACTION;
-  const spread = screenHeight * VERTICAL_SPREAD_FRACTION;
+  // Landscape phones (~800-930 x ~390-430px): horizon sits a touch lower and
+  // the near-pin band compresses so cards never clip off the short bottom edge.
+  const isLandscape = screenWidth > screenHeight;
+  const horizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
+  const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
+  // Hard on-screen clamp: a card anchor can never sit below the viewport
+  // minus one card height, regardless of projection rounding.
+  const maxScreenY = Math.max(12, screenHeight - CARD_HEIGHT_PX - 24);
 
   const projected: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
     // Exact contract mapping: x = width * (screenXNorm * 0.5 + 0.5).
     const rawX = screenWidth * (projected.screenXNorm * 0.5 + 0.5);
     const screenX = clamp(rawX, HEDGE_MARGIN_PX, screenWidth - HEDGE_MARGIN_PX);
     const distanceNorm = clamp(projected.distanceM / MAX_RANGE_METERS, 0, 1);
-    const screenY = horizonY + (1 - distanceNorm) * spread; // near = lower, far = at horizon
+    const rawScreenY = horizonY + (1 - distanceNorm) * spread; // near = lower, far = at horizon
+    const screenY = clamp(rawScreenY, 12, maxScreenY);
     const depthScale = 1.2 - 0.5 * distanceNorm; // 1.2 (near) -> 0.7 (far)
     const depthOpacity = 1.0 - 0.45 * distanceNorm; // 1.0 -> 0.55
     return {
@@ -253,6 +276,9 @@ export function buildPlacards(
     CARD_WIDTH_PX,
     CARD_HEIGHT_PX,
     MIN_CARD_GAP_PX,
+    // Landscape reserves less bottom chrome: the compact input bar sits
+    // closer to the edge, so more of the short viewport stays usable.
+    isLandscape ? BOTTOM_CHROME_PX_LANDSCAPE : BOTTOM_CHROME_PX_PORTRAIT,
   );
 
   return { placed, rejected };
@@ -445,7 +471,15 @@ function DetailPage({
  * Screen position stays at the projected venue anchor in every state;
  * pages stagger vertically below the anchor with STACK_GAP_PX pitch.
  */
-function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number }) {
+function VenueDeck({
+  deck,
+  screenWidth,
+  screenHeight,
+}: {
+  deck: DeckPage;
+  screenWidth: number;
+  screenHeight: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
 
@@ -454,12 +488,28 @@ function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number 
     if (focusIndex >= deck.pages.length) setFocusIndex(0);
   }, [deck.pages.length, focusIndex]);
 
+  const isLandscape = screenWidth > screenHeight;
   const anchor = deck.primary;
   const cardWidth = expanded ? CARD_WIDTH_PX + 40 : CARD_WIDTH_PX;
 
   // Hedge the anchor so the card stays fully on-screen.
   const left = clamp(anchor.screenX, cardWidth / 2 + 8, screenWidth - cardWidth / 2 - 8);
-  const top = anchor.screenY;
+  // Landscape cards are wider relative to the viewport; shift the hedge so the
+  // full card width maps across the wide horizontal FOV without edge clipping.
+  const hedge = Math.min(HEDGE_MARGIN_PX, cardWidth / 2 + 8);
+  const clampedLeft = clamp(anchor.screenX, hedge, screenWidth - hedge);
+  const leftFinal = expanded ? clampedLeft : left;
+  // Clamp the anchor vertically: a card must never hang off the short
+  // landscape bottom edge.
+  const top = clamp(
+    anchor.screenY,
+    12,
+    Math.max(12, screenHeight - (expanded ? EXPANDED_PAGE_HEIGHT_PX : CARD_HEIGHT_PX) - 8),
+  );
+  // Landscape: tighter stagger pitch + fewer visible pages so the deck window
+  // (focused page + staggering) still fits the ~390-430px height.
+  const stackPitch = EXPANDED_PAGE_HEIGHT_PX + (isLandscape ? STACK_GAP_PX_LANDSCAPE : STACK_GAP_PX);
+  const maxVisible = isLandscape ? MAX_VISIBLE_STACK_LANDSCAPE : MAX_VISIBLE_STACK;
 
   if (!expanded) {
     return (
@@ -468,7 +518,7 @@ function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number 
         style={[
           styles.anchorWrap,
           {
-            left,
+            left: leftFinal,
             top,
             opacity: anchor.depthOpacity,
             transform: [{ translateX: -cardWidth / 2 }, { scale: anchor.depthScale }],
@@ -486,7 +536,7 @@ function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number 
     ...deck.pages.slice(focusIndex),
     ...deck.pages.slice(0, focusIndex),
   ];
-  const windowPages = ordered.slice(0, MAX_VISIBLE_STACK);
+  const windowPages = ordered.slice(0, maxVisible);
   const originalIndexOf = (page: PlacedPlacard): number =>
     deck.pages.findIndex((p) => p.pin.listing_id === page.pin.listing_id);
 
@@ -507,7 +557,7 @@ function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number 
         style={[
           styles.anchorWrap,
           {
-            left,
+            left: leftFinal,
             top,
             opacity: 1,
             transform: [{ translateX: -cardWidth / 2 }, { scale: 1 }],
@@ -531,7 +581,10 @@ function VenueDeck({ deck, screenWidth }: { deck: DeckPage; screenWidth: number 
             styles.anchorWrap,
             {
               left,
-              top: top + (i + 1) * (EXPANDED_PAGE_HEIGHT_PX + STACK_GAP_PX),
+              top: Math.min(
+                Math.max(12, screenHeight - EXPANDED_PAGE_HEIGHT_PX - 8),
+                top + (i + 1) * stackPitch,
+              ),
               opacity: 0.4,
               transform: [{ translateX: -cardWidth / 2 }, { scale: 0.92 }],
             },
@@ -561,11 +614,12 @@ export default function PlacardOverlay({
   userHeading,
   screenWidth,
   screenHeight,
+  isLandscape = false,
   onStats,
 }: PlacardOverlayProps) {
   const { placed, rejected } = useMemo(
-    () => buildPlacards(pins, userPosition, userHeading, screenWidth, screenHeight),
-    [pins, userPosition, userHeading, screenWidth, screenHeight],
+    () => buildPlacards(pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape),
+    [pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape],
   );
 
   const decks = useMemo(() => buildDecks(placed), [placed]);
@@ -584,7 +638,7 @@ export default function PlacardOverlay({
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {decks.map((deck) => (
-        <VenueDeck key={deck.clusterId} deck={deck} screenWidth={screenWidth} />
+        <VenueDeck key={deck.clusterId} deck={deck} screenWidth={screenWidth} screenHeight={screenHeight} />
       ))}
     </View>
   );
