@@ -412,11 +412,13 @@ export async function fetchRealPins(
     const rawItems = parseMcpItems(data);
     const livePins = mapMcpItemsToPins(rawItems, lat, lng);
 
-    // In LIVE mode: Blend the verified walkable corridor anchor places
-    // (Chapel, Foreign Cinema, Mission Rec, Bookstore Comedy - all <= 500m)
-    // with the live citywide MCP event signals!
-    // This gives the user immediate walkable outings right on Valencia street,
-    // plus live citywide events projected along the true compass bearings.
+    // In LIVE mode: blend the 12 verified corridor anchor fixtures in with
+    // the live citywide MCP event signals. Even when every live event sits
+    // beyond the 500 m walk radius (the get_weekend pull was 0.6-17.6 km),
+    // the user always has nearby walkable outings on the street (Feral
+    // Friday ~349 m, Mission Rec ~469 m from the anchor) instead of an empty
+    // viewport — and live events project along their TRUE compass bearings
+    // with honest real_distance_m far badges.
     const blendedPins: RawPin[] = [
       ...CORRIDOR_REAL_FIXTURES.map((p) => ({ ...p, is_walkable_anchor: true })),
       ...livePins,

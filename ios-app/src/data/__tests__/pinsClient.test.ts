@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapMcpItemsToPins } from '../pinsClient.ts';
+import { CORRIDOR_REAL_FIXTURES, mapMcpItemsToPins } from '../pinsClient.ts';
 
 const ANCHOR = { lat: 37.75815, lng: -122.41793 }; // Valencia & 20th (SF Mission anchor)
 
@@ -136,4 +136,38 @@ test('golden-angle spiral distributes coordinate-less pins across ALL quadrants'
   // 19 golden-angle samples must cover both halves on both axes.
   assert.ok(north >= 5 && north <= 14, `north=${north}`);
   assert.ok(east >= 5 && east <= 14, `east=${east}`);
+});
+
+test('LIVE blend: verified corridor anchors ride along with live events (never an empty street)', () => {
+  // Simulate the fetchRealPins success-path blend: corridor fixtures + live
+  // citywide events. The user must ALWAYS see the verified walkable anchors
+  // (Feral Friday ~349 m, Mission Rec ~469 m from the anchor) even when
+  // every live event is far — the MrMister "no walkable cards" regression.
+  const farEvents = mapMcpItemsToPins(
+    [mcpItem({ id: 'ev-union', title: 'Union Square Live Event', latitude: 37.788874, longitude: -122.407828 })],
+    ANCHOR.lat,
+    ANCHOR.lng,
+  );
+  assert.equal(farEvents.length, 1);
+  assert.ok((farEvents[0].real_distance_m as number) > 500, 'live event is far');
+
+  const blended = [
+    ...CORRIDOR_REAL_FIXTURES.map((p) => ({ ...p, is_walkable_anchor: true })),
+    ...farEvents,
+  ];
+  assert.equal(blended.length, 13);
+  // At least two verified anchors are inside the 500 m walk radius from the
+  // corridor anchor: Feral Friday and the Mission Rec cluster.
+  const mPerDegLng = 111320 * Math.cos((ANCHOR.lat * Math.PI) / 180);
+  const walkableAnchors = blended.filter((p) => {
+    if (p.is_walkable_anchor !== true) return false; // verified anchors only
+    const dx = (p.lng - ANCHOR.lng) * mPerDegLng;
+    const dy = (p.lat - ANCHOR.lat) * 110540;
+    return Math.sqrt(dx * dx + dy * dy) <= 500;
+  });
+  assert.ok(walkableAnchors.length >= 2, `only ${walkableAnchors.length} walkable anchors`);
+  for (const a of walkableAnchors) {
+    assert.equal(a.is_walkable_anchor, true);
+    assert.equal((a as { source_tool?: unknown }).source_tool, 'supabase_entities_anon', 'anchors keep verified provenance');
+  }
 });

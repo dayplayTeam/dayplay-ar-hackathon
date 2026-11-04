@@ -393,16 +393,13 @@ function BearingChip({ bearingDeg }: { bearingDeg: number }) {
 
 function DistanceChip({ meters, realMeters }: { meters: number; realMeters?: number }) {
   // Corridor-remapped far event: the AR slot is inside the walk radius but
-  // the venue is not — label the TRUE distance so the user is never misled
-  // about walkability (e.g. Union Square event mapped to a 300 m slot:
-  // "300 m slot · 3.5 km • Far").
+  // the venue is not — show the TRUE distance as a clear "◇ 3.4 km • Far"
+  // pill (hollow diamond = radar signal, never implies a short walk).
   const far = realMeters !== undefined && realMeters > meters + 1;
-  const label = far
-    ? `${formatDistance(meters)} slot · ${formatDistance(realMeters)} • Far`
-    : formatDistance(meters);
+  const label = far ? `${formatDistance(realMeters)} • Far` : formatDistance(meters);
   return (
     <View style={styles.distanceChip}>
-      <Text style={styles.distanceIcon}>◎</Text>
+      <Text style={styles.distanceIcon}>{far ? "◇" : "◎"}</Text>
       <Text style={styles.distanceText}>{label}</Text>
     </View>
   );
@@ -441,6 +438,11 @@ function VenueCard({
   // (one far remapped session inside a walkable cluster must not read as a
   // short walk).
   const walkable = clusterWalkable(placard);
+  const borderStyle = getGraduatedBorder(
+    typeof placard.pin.real_distance_m === "number" ? placard.pin.real_distance_m : undefined,
+    placard.distanceM,
+    walkable,
+  );
   return (
     <Pressable
       accessibilityRole="button"
@@ -451,6 +453,7 @@ function VenueCard({
       style={({ pressed }) => [
         styles.card,
         walkable ? styles.cardWalkable : styles.cardFar,
+        { borderColor: borderStyle.borderColor, borderWidth: borderStyle.borderWidth },
         pressed && styles.cardPressed,
       ]}
     >
@@ -601,10 +604,14 @@ function VenueDeck({
   deck,
   screenWidth,
   screenHeight,
+  hasAnyWalkableInView,
 }: {
   deck: DeckPage;
   screenWidth: number;
   screenHeight: number;
+  /** True when at least one deck in the current view is walkable — drives
+   * the graduated far-card dimming (nothing walkable -> elevated band). */
+  hasAnyWalkableInView: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -618,9 +625,17 @@ function VenueDeck({
   const anchor = deck.primary;
   const cardWidth = expanded ? CARD_WIDTH_PX + 40 : CARD_WIDTH_PX;
   const walkable = clusterWalkable(anchor);
-  const rawDist = (anchor.pin as any).real_distance_m;
-  const graduatedOpacity = getGraduatedOpacity(rawDist, anchor.distanceM, walkable, false);
-  const anchorOpacity = expanded ? 0.5 : Math.max(0.65, anchor.depthOpacity * graduatedOpacity);
+  const rawDist =
+    typeof anchor.pin.real_distance_m === "number" ? anchor.pin.real_distance_m : undefined;
+  // Graduated distance styling (MrMister, 2026-11-04): walkable cards hold
+  // full vibrant 0.95-1.0 presence; far cards use the graduated ramp
+  // (0.85 -> 0.60 with a walkable card in view, elevated 0.95 -> 0.78 when
+  // nothing walkable is in view so the closest cards read as primary radar
+  // targets — never the old flat 0.35 ghost-card wall).
+  const graduatedOpacity = getGraduatedOpacity(rawDist, anchor.distanceM, walkable, hasAnyWalkableInView);
+  const anchorOpacity = expanded
+    ? walkable ? 1 : graduatedOpacity
+    : walkable ? 0.95 + 0.05 * anchor.depthOpacity : graduatedOpacity;
   const anchorShadow = walkable ? "#000" : "rgba(255,107,71,0.15)";
 
   // Hedge the anchor so the card stays fully on-screen.
@@ -692,7 +707,7 @@ function VenueDeck({
           {
             left: leftFinal,
             top,
-            opacity: walkable ? 1 : 0.5,
+            opacity: walkable ? 1 : graduatedOpacity,
             shadowColor: walkable ? "#000" : "rgba(255,107,71,0.15)",
             transform: [{ translateX: -cardWidth / 2 }, { scale: 1 }],
           },
@@ -719,7 +734,7 @@ function VenueDeck({
                 Math.max(12, screenHeight - EXPANDED_PAGE_HEIGHT_PX - 8),
                 top + (i + 1) * stackPitch,
               ),
-              opacity: 0.4,
+              opacity: 0.5,
               transform: [{ translateX: -cardWidth / 2 }, { scale: 0.92 }],
             },
           ]}
@@ -759,6 +774,9 @@ export default function PlacardOverlay({
   );
 
   const decks = useMemo(() => buildDecks(placed), [placed]);
+  // "Nothing walkable in view" step-up: when no deck is walkable, far cards
+  // brighten to the elevated band so the closest cards stay primary targets.
+  const anyWalkableInView = placed.some((p) => p.isWalkable);
 
   useEffect(() => {
     onStats?.({
@@ -794,7 +812,13 @@ export default function PlacardOverlay({
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {decks.map((deck) => (
-        <VenueDeck key={deck.clusterId} deck={deck} screenWidth={screenWidth} screenHeight={screenHeight} />
+        <VenueDeck
+          key={deck.clusterId}
+          deck={deck}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          hasAnyWalkableInView={anyWalkableInView}
+        />
       ))}
     </View>
   );
@@ -862,12 +886,12 @@ const styles = StyleSheet.create({
     shadowColor: "rgba(255,107,71,0.35)",
     shadowOpacity: 0.55,
   },
-  // FAR / info-only placard: faded + near-invisible hairline so it reads as
-  // a distant citywide signal, deliberately harder to see than walkable cards.
+  // FAR / info-only placard: graduated depth styling. The graduated opacity
+  // ramp + per-card border (getGraduatedBorder) carry the "distant" signal;
+  // the background holds 0.85 alpha so text stays high-contrast against the
+  // live camera at every distance step — never an unreadable ghost.
   cardFar: {
-    borderColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    backgroundColor: "rgba(28,27,26,0.65)",
+    backgroundColor: "rgba(28,27,26,0.85)",
     shadowOpacity: 0.25,
   },
   titleFar: { color: TEXT_SECONDARY },
