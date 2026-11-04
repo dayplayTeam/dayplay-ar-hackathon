@@ -354,12 +354,13 @@ function ArCameraScreen() {
         sub = DeviceMotion.addListener((motion) => {
           const g = motion.accelerationIncludingGravity;
           if (!g || !Number.isFinite(g.x) || !Number.isFinite(g.y) || !Number.isFinite(g.z)) return;
-          // True camera elevation/depression angle relative to horizontal:
-          // Phone upright facing horizon: g.y ≈ -9.8, g.z ≈ 0 -> pitch ≈ 0°
-          // Tilted down toward street (highrise): g.z < 0 -> pitch > 0° (depression angle)
-          // Pointing down at feet: g.z ≈ -9.8, g.y ≈ 0 -> pitch ≈ +90°
-          // Tilted up toward sky: g.z > 0 -> pitch < 0° (elevation angle)
-          const pitchDeg = (Math.atan2(-g.z, -g.y) * 180) / Math.PI;
+          // Accommodate BOTH Portrait and Landscape:
+          // In Portrait: screen "down" is along -Y (g.y ≈ -9.8).
+          // In Landscape: phone is rotated 90°, so screen "down" is along X (|g.x| ≈ 9.8, g.y ≈ 0).
+          // Using Math.hypot(g.x, g.y) or magnitude in screen-plane gives true horizon reference:
+          const lateralG = Math.sqrt(g.x * g.x + g.y * g.y);
+          // Angle between screen plane and gravity (0° = level horizon, +90° = pointing straight down at floor)
+          const pitchDeg = (Math.atan2(-g.z, lateralG) * 180) / Math.PI;
           setRigRef.current((prev) => ({ ...prev, pitch: Math.round(pitchDeg) }));
         });
       } catch {
@@ -392,7 +393,13 @@ function ArCameraScreen() {
               ? { latitude: rig.latitude, longitude: rig.longitude, accuracy: rig.accuracy }
               : null
         }
-        userHeading={rig.heading}
+        userHeading={
+          rig.heading !== null
+            ? isLandscape
+              ? (rig.heading + 90) % 360 // Landscape camera lens offset relative to True North
+              : rig.heading
+            : null
+        }
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         isLandscape={screenWidth > screenHeight}
