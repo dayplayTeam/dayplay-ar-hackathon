@@ -162,11 +162,22 @@ function ArCameraScreen() {
   const onSelectChip = useCallback((chip: string | null) => {
     setActiveChip(chip);
     if (chip !== null) {
-      // Clear free-text input so chip is the sole authority
       setSearchQuery("");
       setSubmittedQuery("");
+      
+      // When in LIVE mode, trigger live MCP query for the selected chip with loading pulse
+      if (pinSource === "live") {
+        setLoadingPins(true);
+        const coords = effectiveUser ? { lat: effectiveUser.lat, lng: effectiveUser.lng } : undefined;
+        void fetchRealPins(undefined, coords, chip).then((result) => {
+          setPins(result.pins);
+          setPinSource(result.source);
+          setPinSourceNote(result.error);
+          setLoadingPins(false);
+        });
+      }
     }
-  }, []);
+  }, [pinSource, effectiveUser]);
 
   const onChangeSearchQuery = useCallback((query: string) => {
     setSearchQuery(query);

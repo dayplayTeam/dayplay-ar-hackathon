@@ -654,9 +654,10 @@ export default function PlacardOverlay({
     });
   }, [onStats, pins.length, placed.length, rejected.length, decks.length]);
 
-  if (decks.length === 0) {
-    // Honest-Zero: a filter that maps to zero verified places says so —
-    // no fabricated fallback pins, no silent blank viewport.
+  // Only show Honest-Zero card if total pins provided to the overlay is 0!
+  // If pins exist in the corridor but are simply outside the 62° camera FOV (e.g. behind the user),
+  // return null so the viewport remains clean (the HUD already accurately reflects 0/N in FOV).
+  if (pins.length === 0) {
     if (!showEmptyState) return null;
     return (
       <View pointerEvents="none" style={styles.honestZeroWrap}>
@@ -669,6 +670,10 @@ export default function PlacardOverlay({
         </View>
       </View>
     );
+  }
+
+  if (decks.length === 0) {
+    return null;
   }
 
   return (
