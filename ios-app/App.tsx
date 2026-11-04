@@ -97,6 +97,10 @@ function ArCameraScreen() {
   const [searchQuery, setSearchQuery] = useState("ai marketing meetups this week");
   const [submittedQuery, setSubmittedQuery] = useState("ai marketing meetups this week");
   const [barCollapsed, setBarCollapsed] = useState(false);
+  // Voice input stream: last voice-captured query (VoiceInputButton). When the
+  // submitted query equals the last captured voice text, the HUD banner flips
+  // to the 🎙️ voice state so judges see voice → placard filter → HUD live.
+  const [voiceQuery, setVoiceQuery] = useState<string | null>(null);
   // REC VIEW: hudMode "minimized" hides the input bar for a pristine camera viewport.
   const recView = hudMode === "minimized";
 
@@ -149,6 +153,11 @@ function ArCameraScreen() {
     setSearchQuery("");
     setSubmittedQuery("");
     setActiveChip(null);
+    setVoiceQuery(null);
+  }, []);
+
+  const onVoiceQuery = useCallback((query: string) => {
+    setVoiceQuery(query);
   }, []);
 
   const onExpandBar = useCallback(() => setBarCollapsed(false), []);
@@ -157,8 +166,12 @@ function ArCameraScreen() {
   // pins handed to the placard overlay; unmatched queries fall back to the
   // primary demo pins with an intent banner.
   const filtered = filterPins(pins, activeChip, submittedQuery);
-  const intentBanner =
-    filtered.fellBack && submittedQuery.trim().length > 0
+  // Voice origin: the last submitted query came from the voice input stream.
+  const voiceOrigin =
+    voiceQuery !== null && submittedQuery.trim() === voiceQuery.trim();
+  const intentBanner = voiceOrigin
+    ? `🎙️ Voice: "${voiceQuery.trim()}" → ${filtered.pins.length} pins in view`
+    : filtered.fellBack && submittedQuery.trim().length > 0
       ? `Intent: "${submittedQuery.trim()}" (${filtered.pins.length} pins mapped)`
       : null;
 
@@ -344,6 +357,7 @@ function ArCameraScreen() {
           onChangeSearchQuery={onChangeSearchQuery}
           onSubmitQuery={onSubmitQuery}
           onClearFilter={onClearFilter}
+          onVoiceQuery={onVoiceQuery}
           resultCount={filtered.pins.length}
           hidden={recView}
           collapsed={barCollapsed}

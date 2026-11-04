@@ -2,7 +2,7 @@
  * InputFilterBar — glassmorphic bottom search bar + quick intent chips.
  *
  * Layout (bottom docked, above safe-area bottom inset):
- *   [ 🔍 ai marketing meetups this week      ✕ | ↵ ]
+ *   [ 🔍 ai marketing meetups this week   🎙️ ✕ | ↵ ]
  *   [ ⚡ What's live now ] [ 📅 Happening today ] [ 🎉 … ]
  *
  * Styling: DayPlay dark canon tokens (src/theme/dayplay.ts) — glass
@@ -26,6 +26,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import VoiceInputButton from "./VoiceInputButton.tsx";
 import {
   ACCENT_CORAL,
   BORDER,
@@ -63,6 +64,8 @@ export interface InputFilterBarProps {
   collapsed?: boolean;
   /** Expand from the collapsed pill. */
   onExpand?: () => void;
+  /** App-level voice capture hook — fires when a voice query is recognized. */
+  onVoiceQuery?: (query: string) => void;
   /** Preloaded text inside the field (defaults to the demo query). */
   initialQuery?: string;
 }
@@ -113,6 +116,7 @@ export default function InputFilterBar({
   hidden = false,
   collapsed = false,
   onExpand,
+  onVoiceQuery,
   initialQuery = "ai marketing meetups this week",
 }: InputFilterBarProps) {
   const [localQuery, setLocalQuery] = useState(searchQuery || initialQuery);
@@ -146,6 +150,14 @@ export default function InputFilterBar({
 
   const submit = () => onSubmitQuery(localQuery.trim());
 
+  /** Voice capture: populate the field, route upstream, auto-submit the filter. */
+  const onVoiceResult = (query: string) => {
+    setLocalQuery(query);
+    onChangeSearchQuery(query);
+    onSubmitQuery(query);
+    onVoiceQuery?.(query);
+  };
+
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { left: 12 + sideInset, right: 12 + sideInset }]}>
       <View style={[styles.bar, isLandscape ? styles.barCompact : null]}>
@@ -164,6 +176,7 @@ export default function InputFilterBar({
             autoCorrect={false}
             autoCapitalize="none"
           />
+          <VoiceInputButton onVoiceResult={onVoiceResult} />
           {localQuery.length > 0 ? (
             <Pressable
               accessibilityRole="button"

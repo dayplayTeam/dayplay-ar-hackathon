@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.dayplay.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required for the AR street view overlay.",
+        "NSMicrophoneUsageDescription": "Microphone access is required for hands-free voice intent queries in AR street view.",
         "NSLocationWhenInUseUsageDescription": "Location and compass access are required to place AR pins on real-world venues."
       }
     },
