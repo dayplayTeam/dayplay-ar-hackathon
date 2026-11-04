@@ -9,12 +9,18 @@
  * surface rgba(28,27,26,0.88), hairline #2A2826 border, coral #FF6B47
  * active chips, muted #A19D97 inactive chips, #F5F4F2 input text.
  *
+ * Single-authority contract (App implements the state side):
+ *   - Tapping a chip clears the free-text input and executes the chip filter.
+ *   - Typing or submitting (↵ key / button) hands authority to the text
+ *     query — App clears the active chip; the keyboard dismisses on submit
+ *     and the result badge flashes coral as apply feedback.
+ *
  * REC VIEW: the parent renders nothing (or a minimal floating pill to
  * re-expand) when `hidden` is true, so screen recording shows a pristine
  * camera viewport.
  */
 
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -149,9 +155,36 @@ export default function InputFilterBar({
     );
   }
 
+  /**
+   * Single-authority submit: dismiss the keyboard and hand the text query to
+   * App (which clears any active chip when non-empty). The result badge
+   * flashes coral briefly so the applied filter is visibly confirmed.
+   */
+  const [appliedFlash, setAppliedFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
   const submit = () => {
     Keyboard.dismiss();
     onSubmitQuery(localQuery.trim());
+    setAppliedFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setAppliedFlash(false), 1200);
+  };
+
+  /**
+   * Chip tap (single authority): selecting a chip clears the free-text input
+   * immediately — chip and text never fight over the filter — and App
+   * executes the chip filter on the spot. Toggling the same chip off
+   * restores the unfiltered ground truth.
+   */
+  const onChipPress = (chip: string) => {
+    if (activeChip !== chip) setLocalQuery("");
+    onSelectChip(activeChip === chip ? null : chip);
   };
 
   /** Voice capture: populate the field, route upstream, auto-submit the filter. */
@@ -204,9 +237,12 @@ export default function InputFilterBar({
           </Pressable>
         </View>
 
-        {/* Result count badge */}
+        {/* Result count badge — flashes coral for ~1s after submit/apply. */}
         {typeof resultCount === "number" ? (
-          <Text style={styles.resultCount}>{resultCount} pins</Text>
+          <Text style={[styles.resultCount, appliedFlash ? styles.resultCountApplied : null]}>
+            {appliedFlash ? "✓ " : ""}
+            {resultCount} pins
+          </Text>
         ) : null}
 
         {/* Quick intent chips */}
@@ -220,7 +256,7 @@ export default function InputFilterBar({
               key={chip}
               label={chip}
               active={activeChip === chip}
-              onPress={() => onSelectChip(activeChip === chip ? null : chip)}
+              onPress={() => onChipPress(chip)}
               compact={isLandscape}
             />
           ))}
@@ -279,6 +315,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     alignSelf: "flex-end",
   },
+  resultCountApplied: { color: ACCENT_CORAL, fontWeight: "800" },
   chipRow: {
     flexDirection: "row",
     gap: 8,
