@@ -15,10 +15,10 @@
  *
  * MCP event items carry their coordinates in `latitude` / `longitude`
  * (`lat` / `lng` are null on the wire — confirmed live 2026-11-04), and many
- * returned events sit beyond the 500 m walk radius (576 m .. 17.6 km). Events
+ * returned events sit beyond the 1200 m walk radius (576 m .. 17.6 km). Events
  * inside SF bounds are therefore mapped onto the walk corridor: the REAL
  * bearing from the user is preserved (the direction you face an event is
- * honest), while the walked distance is compressed into the 500 m render
+ * honest), while the walked distance is compressed into the 1200 m render
  * radius so the events project as AR pins the gate will accept. Remapped
  * pins keep their true distance in `real_distance_m` so the placard can
  * show an honest "3.5 km • Far" badge (regression follow-up to the
@@ -161,18 +161,30 @@ const INTENT_TOOL: Record<PinIntent, string> = {
   weekend: "get_weekend",
 };
 
+/** Production DayPlay MCP endpoint — the direct-cloud fallback base used when
+ * EXPO_PUBLIC_API_URL is unset (voice intent + pin resolution need no local
+ * backend; verified live 2026-11-04). */
+export const DAYPLAY_MCP_URL = "https://api.dayplay.io/mcp";
+
+/** Hackathon client credentials header pair for the live MCP. */
+export const DAYPLAY_MCP_HEADERS: Readonly<Record<string, string>> = {
+  "Content-Type": "application/json",
+  "X-Dayplay-Client": "dayplay-hackathon",
+  "X-Dayplay-Client-Secret": "cbbd78970c3b5f33e361932a18a7baa8abd6531ee8070fd2b3a5cd7ccdd308d7",
+};
+
 /** SF Bay Area corridor bounds — mirrors src/math/zero_hallucination_gate.ts SF_BOUNDS. */
 const SF_BOUNDS = { minLat: 37.2, maxLat: 38.0, minLng: -123.0, maxLng: -121.6 } as const;
 
 /** Fetch timeout: fail fast to the offline fixture instead of hanging. */
 const FETCH_TIMEOUT_MS = 6000;
 
-/** Max walk radius the zero-hallucination gate accepts (500 m) minus margin. */
-const WALK_RADIUS_M = 470;
+/** Max walk radius the zero-hallucination gate accepts (1200 m) minus margin. */
+const WALK_RADIUS_M = 1170;
 
 /** Corridor spread when compressing far events into the walk radius. */
-const REMAP_MIN_M = 110;
-const REMAP_MAX_M = 450;
+const REMAP_MIN_M = 260;
+const REMAP_MAX_M = 1150;
 
 /** Read the API base URL from the Expo env (set EXPO_PUBLIC_API_URL to point
  * at the backend), or the caller-provided override. */
@@ -211,8 +223,8 @@ function remapIntoCorridor(
     return { lat: userLat + dy / 110540, lng: userLng + dx / (111320 * Math.cos((userLat * Math.PI) / 180)), remapped: false };
   }
   // Deterministic spread by real distance rank proxy: nearer events land
-  // nearer on the corridor (monotone-ish, never over 450 m).
-  const t = Math.min(1, (realDist - WALK_RADIUS_M) / 4000); // 0..1 over ~4.5 km
+  // nearer on the corridor (monotone-ish, never over 1150 m).
+  const t = Math.min(1, (realDist - WALK_RADIUS_M) / 4000); // 0..1 over ~4.7 km
   const target = REMAP_MIN_M + t * (REMAP_MAX_M - REMAP_MIN_M);
   const scale = target / Math.max(realDist, 1e-6);
   return {
@@ -244,15 +256,21 @@ function corridorSlot(userLat: number, userLng: number, idx: number): { lat: num
 }
 
 /** Extract the MCP event items array from a JSON-RPC tools/call response. */
-function parseMcpItems(data: unknown): Record<string, unknown>[] {
+export function parseMcpItems(data: unknown): Record<string, unknown>[] {
   const d = data as {
     result?: { content?: Array<{ text?: string }>; items?: unknown };
   } | null;
   const textContent = d?.result?.content?.[0]?.text;
   if (typeof textContent === "string") {
     try {
-      const parsed = JSON.parse(textContent) as { items?: unknown; events?: unknown; places?: unknown };
-      const arr = parsed.items ?? parsed.events ?? parsed.places;
+      const parsed = JSON.parse(textContent) as {
+        items?: unknown;
+        events?: unknown;
+        places?: unknown;
+        rows?: unknown;
+      };
+      // `rows` = search_smart's ranked result shape (voice/text smart search).
+      const arr = parsed.items ?? parsed.events ?? parsed.places ?? parsed.rows;
       return Array.isArray(arr) ? (arr as Record<string, unknown>[]) : [];
     } catch {
       return [];
@@ -393,14 +411,10 @@ export async function fetchRealPins(
       },
     };
 
-    const response = await fetch(resolveApiUrl(apiUrl) ?? "https://api.dayplay.io/mcp", {
+    const response = await fetch(resolveApiUrl(apiUrl) ?? DAYPLAY_MCP_URL, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Dayplay-Client": "dayplay-hackathon",
-        "X-Dayplay-Client-Secret": "cbbd78970c3b5f33e361932a18a7baa8abd6531ee8070fd2b3a5cd7ccdd308d7",
-      },
+      headers: DAYPLAY_MCP_HEADERS,
       body: JSON.stringify(mcpPayload),
     });
 
@@ -414,7 +428,7 @@ export async function fetchRealPins(
 
     // In LIVE mode: blend the 12 verified corridor anchor fixtures in with
     // the live citywide MCP event signals. Even when every live event sits
-    // beyond the 500 m walk radius (the get_weekend pull was 0.6-17.6 km),
+    // beyond the 1200 m walk radius (the get_weekend pull was 0.6-17.6 km),
     // the user always has nearby walkable outings on the street (Feral
     // Friday ~349 m, Mission Rec ~469 m from the anchor) instead of an empty
     // viewport — and live events project along their TRUE compass bearings

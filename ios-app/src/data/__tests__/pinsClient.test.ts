@@ -27,12 +27,12 @@ test('far citywide event is remapped inside the walk radius with TRUE bearing pr
   const pins = mapMcpItemsToPins([mcpItem()], ANCHOR.lat, ANCHOR.lng);
   assert.equal(pins.length, 1);
   const pin = pins[0];
-  // Inside the 500 m gate radius (gate accepts at ~450 m max).
+  // Inside the 1200 m gate radius (gate accepts at ~1150 m max).
   const dLat = (pin.lat - ANCHOR.lat) * 110540;
   const dLng = (pin.lng - ANCHOR.lng) * 111320 * Math.cos((ANCHOR.lat * Math.PI) / 180);
   const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-  assert.ok(dist <= 500, `remapped distance ${dist} must be <= 500`);
-  assert.ok(dist >= 100, `remapped distance ${dist} must be >= 100 (not at feet)`);
+  assert.ok(dist <= 1200, `remapped distance ${dist} must be <= 1200`);
+  assert.ok(dist >= 200, `remapped distance ${dist} must be >= 200 (not at feet)`);
   // Bearing preserved: Union Square is NE of the anchor — remapped pin too.
   assert.ok(dLat > 0 && dLng > 0, 'NE event must land NE of the anchor');
 });
@@ -46,7 +46,7 @@ test('remapped far pin carries honest real_distance_m', () => {
 });
 
 test('near event inside the walk radius keeps REAL coordinates untouched', () => {
-  // ~286 m SE of anchor (inside the 470 m walk radius).
+  // ~286 m SE of anchor (inside the 1170 m walk band).
   const pins = mapMcpItemsToPins(
     [mcpItem({ id: 'ev-near', title: 'Nearby Event', latitude: 37.75715, longitude: -122.41493 })],
     ANCHOR.lat,
@@ -78,13 +78,13 @@ test('coordinate-less event gets a deterministic corridor slot in the front band
   const dLat = (pin.lat - ANCHOR.lat) * 110540;
   const dLng = (pin.lng - ANCHOR.lng) * 111320 * Math.cos((ANCHOR.lat * Math.PI) / 180);
   const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-  assert.ok(dist >= 100 && dist <= 500, `slot dist ${dist} within band`);
+  assert.ok(dist >= 200 && dist <= 1200, `slot dist ${dist} within band`);
   // First slot starts due north (+90 in compass bearing = +Y). Front half
   // means the pin is north of the user.
   assert.ok(dLat > 0, 'first slot must be in the front (north) half');
 });
 
-test('19 citywide weekend events (incident replay) ALL land inside the 500 m gate', () => {
+test('19 citywide weekend events (incident replay) ALL land inside the 1200 m gate', () => {
   // Deterministic spread across SF (Union Sq, Embarcadero, Inner Richmond,
   // Financial District, Sunset...) mirroring the reported weekend pull.
   const far = [
@@ -117,7 +117,7 @@ test('19 citywide weekend events (incident replay) ALL land inside the 500 m gat
     const dLat = (pin.lat - ANCHOR.lat) * 110540;
     const dLng = (pin.lng - ANCHOR.lng) * 111320 * Math.cos((ANCHOR.lat * Math.PI) / 180);
     const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-    assert.ok(dist <= 500, `${pin.name} at ${Math.round(dist)} m must pass the gate`);
+    assert.ok(dist <= 1200, `${pin.name} at ${Math.round(dist)} m must pass the gate`);
     assert.equal(typeof pin.real_distance_m, 'number');
   }
 });
@@ -149,21 +149,21 @@ test('LIVE blend: verified corridor anchors ride along with live events (never a
     ANCHOR.lng,
   );
   assert.equal(farEvents.length, 1);
-  assert.ok((farEvents[0].real_distance_m as number) > 500, 'live event is far');
+  assert.ok((farEvents[0].real_distance_m as number) > 1200, 'live event is far');
 
   const blended = [
     ...CORRIDOR_REAL_FIXTURES.map((p) => ({ ...p, is_walkable_anchor: true })),
     ...farEvents,
   ];
   assert.equal(blended.length, 13);
-  // At least two verified anchors are inside the 500 m walk radius from the
-  // corridor anchor: Feral Friday and the Mission Rec cluster.
+  // At least two verified anchors are inside the 1200 m walk radius from
+  // the corridor anchor: Feral Friday and the Mission Rec cluster.
   const mPerDegLng = 111320 * Math.cos((ANCHOR.lat * Math.PI) / 180);
   const walkableAnchors = blended.filter((p) => {
     if (p.is_walkable_anchor !== true) return false; // verified anchors only
     const dx = (p.lng - ANCHOR.lng) * mPerDegLng;
     const dy = (p.lat - ANCHOR.lat) * 110540;
-    return Math.sqrt(dx * dx + dy * dy) <= 500;
+    return Math.sqrt(dx * dx + dy * dy) <= 1200;
   });
   assert.ok(walkableAnchors.length >= 2, `only ${walkableAnchors.length} walkable anchors`);
   for (const a of walkableAnchors) {

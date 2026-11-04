@@ -3,11 +3,13 @@
  * styling for AR placards.
  *
  * Presentation-layer decision logic:
- * - WALKABLE (true distance <= 500 m): full vibrant opacity (0.95-1.0),
+ * - WALKABLE (true distance <= 1200 m): full vibrant opacity (0.95-1.0),
  *   vivid DayPlay coral stroke (#FF6B47, 2 px), clear "🚶 N MIN WALK" badge.
- * - FAR / info-only (true distance > 500 m): GRADUATED opacity — never the
+ *   1200 m ≈ a 15 min brisk walk (~80 m/min) — the classic walkable-
+ *   neighborhood threshold (owner-set, 2026-11-04).
+ * - FAR / info-only (true distance > 1200 m): GRADUATED opacity — never the
  *   old flat unreadable 0.35 ghost card. Opacity scales smoothly from 0.85
- *   (just past the radius) down to a 0.60 floor at 4 km+, over a readable
+ *   (just past the radius) down to a 0.60 floor at 4.7 km+, over a readable
  *   rgba(28,27,26,0.85) background with a subtle depth border fading
  *   rgba(255,255,255,0.2) -> 0.1. Text stays high-contrast at every step.
  * - When NO card in view is walkable, the far band elevates to 0.95 -> 0.78
@@ -15,7 +17,7 @@
  *   screen is never a sea of identical faint ghosts (MrMister, 2026-11-04).
  */
 
-export const WALKABLE_RADIUS_M = 500;
+export const WALKABLE_RADIUS_M = 1200;
 
 /** DEPRECATED: legacy flat far-card opacity from commit 2da5751. The renderer
  * no longer uses it (graduated styling replaced it); kept only so the
@@ -44,7 +46,7 @@ export function walkMinutes(meters: number): number {
 /**
  * Graduated distance opacity for far cards, driven by TRUE distance
  * (real_distance_m when corridor-remapped, else the projected distance):
- *   - walkable present in view: 0.85 at ~600 m -> 0.60 at 4 km+.
+ *   - walkable present in view: 0.85 at ~1200 m -> 0.60 at 4.7 km+.
  *   - nothing walkable in view: elevated 0.95 -> 0.78 band so the closest
  *     available cards stay prominent primary radar targets.
  * Walkable cards always return 1.0 (full vibrant).
@@ -61,7 +63,7 @@ export function getGraduatedOpacity(
   const baseFloor = hasAnyWalkableInView ? 0.60 : 0.78;
   const baseCeiling = hasAnyWalkableInView ? 0.85 : 0.95;
 
-  // Smooth 0..1 ramp over 500 m .. 4 km (floor = full depth at 4 km+).
+  // Smooth 0..1 ramp over 1200 m .. 4.7 km (floor = full depth at 4.7 km+).
   const t = Math.min(1, Math.max(0, (d - WALKABLE_RADIUS_M) / 3500));
   return baseCeiling - t * (baseCeiling - baseFloor);
 }
@@ -69,7 +71,7 @@ export function getGraduatedOpacity(
 /**
  * Graduated depth border: walkable cards get the vivid DayPlay coral stroke
  * (2 px); far cards get a subtle white hairline fading from 0.2 alpha just
- * past the radius to 0.1 at 4 km+ — depth cue, never illegibility.
+ * past the radius to 0.1 at 4.7 km+ — depth cue, never illegibility.
  */
 export function getGraduatedBorder(
   realDistanceM: number | undefined,

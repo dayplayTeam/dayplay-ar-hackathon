@@ -36,7 +36,7 @@ const NEARBY_PIN: SpatialPin = {
 // ------------------- happy path -------------------
 
 test('accepts a real verified pin (client-side distance, user nearby)', () => {
-  // User stands next to the venue (~10 m away) -> within the 500 m default.
+  // User stands next to the venue (~10 m away) -> within the 1200 m default.
   const r = validatePin(REAL_PIN, { lat: 37.76329, lng: -122.40795 });
   assert.equal(r.ok, true);
   if (r.ok) assert.equal(r.pin.listing_id, REAL_PIN.listing_id);
@@ -170,14 +170,14 @@ test('SF_BOUNDS match backend/validator.py', () => {
 
 // ------------------- distance range gate -------------------
 
-test('MAX_RANGE_METERS default is 500', () => {
-  assert.equal(MAX_RANGE_METERS, 500);
+test('MAX_RANGE_METERS default is 1200 (walk radius)', () => {
+  assert.equal(MAX_RANGE_METERS, 1200);
 });
 
-test('rejects pin beyond max range (>500 m, real corridor pin at ~1.1 km)', () => {
-  const r = validatePin(REAL_PIN, USER); // 1100 m away with default 500 m cap
-  assert.equal(r.ok, false);
-  if (!r.ok) assert.equal(r.reason, 'distance_out_of_range');
+test('accepts the real corridor pin at ~1.1 km inside the 1200 m default', () => {
+  // 1100 m away with the default 1200 m cap: within the walk radius now.
+  const r = validatePin(REAL_PIN, USER);
+  assert.equal(r.ok, true);
 });
 
 test('accepts the same pin when user is within range', () => {
@@ -190,8 +190,11 @@ test('respects custom max range (1100 m pin: accepted at 1200 cap, rejected at 1
   assert.equal(validatePin(REAL_PIN, USER, 1000).ok, false);
 });
 
-test('edge: pin just beyond 500 m is rejected, just within accepted', () => {
-  const dLat = 501 / 111320; // ~501 m due north
+test('edge: pin just beyond 1200 m is rejected, just within accepted', () => {
+  // Degrees offset via the equirectangular parity constant (111,320 m/deg
+  // lat); haversine and equirect agree to <0.2% in the corridor, and the
+  // 2 m offsets here sit far from the 1200 m boundary either way.
+  const dLat = 1210 / 111320; // ~1210 m due north: beyond the radius
   assert.equal(
     validatePin(
       { ...NEARBY_PIN, lat: USER.lat + dLat },
@@ -199,7 +202,7 @@ test('edge: pin just beyond 500 m is rejected, just within accepted', () => {
     ).ok,
     false,
   );
-  const dLatIn = 499 / 111320; // ~499 m due north
+  const dLatIn = 1190 / 111320; // ~1190 m due north: inside the radius
   assert.equal(
     validatePin(
       { ...NEARBY_PIN, lat: USER.lat + dLatIn },
@@ -231,7 +234,7 @@ test('rejects NaN distance_m fallback', () => {
 });
 
 test('rejects pin whose distance_m exceeds max range when no user position', () => {
-  const r = validatePin({ ...NEARBY_PIN, distance_m: 501 });
+  const r = validatePin({ ...NEARBY_PIN, distance_m: 1201 });
   assert.equal(r.ok, false);
   if (!r.ok) assert.equal(r.reason, 'distance_out_of_range');
 });
@@ -273,7 +276,7 @@ test('first-failure-wins: bad listing_id reported even when coords also bad', ()
 
 test('validatePins filters a mixed batch with structured drops', () => {
   const batch = [
-    REAL_PIN, // ok but out of 500 m range -> rejected
+    { ...REAL_PIN, lat: 37.7751, lng: -122.4198 }, // ~1.7 km north: beyond the 1200 m radius -> rejected
     NEARBY_PIN, // ok
     { ...NEARBY_PIN, listing_id: '' }, // missing id
     { ...NEARBY_PIN, lat: 'x' }, // bad coords

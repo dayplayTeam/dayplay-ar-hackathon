@@ -112,7 +112,7 @@ export interface PlacedPlacard {
   /** Visual opacity (1.0 = closest, 0.55 = far edge). */
   depthOpacity: number;
   /** True when the venue is genuinely walkable from the user (no corridor
-   * remap beyond the 500 m walk radius). False = far/citywide radar pin:
+   * remap beyond the 1200 m walk radius). False = far/citywide radar pin:
    * rendered faded + info-only so judges can tell at a glance. */
   isWalkable: boolean;
   /** Total pins in this venue cluster (1 = plain single pin). */

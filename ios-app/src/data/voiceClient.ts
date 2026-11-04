@@ -15,6 +15,13 @@
  *   2. multipart `audio` file — real model transcription via whisper.cpp.
  *   3. `audio_base64` — inline audio bytes (fallback transport).
  *
+ * No-backend fallback (never a hard blocker): when no backend URL resolves,
+ * the query is NOT dropped — it goes straight to the live production
+ * DayPlay MCP `search_smart` tool (direct cloud, hackathon credentials,
+ * verified live 2026-11-04), which resolves the user's own words into
+ * ranked, geo-verified rows. The client zero-hallucination gate still
+ * re-validates every pin at render time.
+ *
  * The caller decides nothing about correctness: every returned pin has
  * already passed the backend's zero-hallucination gate. On transport
  * failure the helper returns `ok: false` with a human-readable error and
@@ -23,6 +30,7 @@
  */
 
 import { resolveApiUrl } from "./pinsClient.ts";
+import { searchSmartResolve } from "./smartSearchClient.ts";
 import type { RawPin } from "../components/PlacardOverlay.tsx";
 
 /** Upload timeout: STT + Muse loop on a local whisper.cpp box is fast, but
@@ -57,7 +65,8 @@ export interface VoiceTranscribeResult {
 /**
  * Read the backend base URL from EXPO_PUBLIC_API_URL (set in .env or via
  * `EXPO_PUBLIC_API_URL=http://<mac-ip>:8000 npx expo start`). Null when
- * unset — voice pickup then degrades to the client transcript path.
+ * unset — transcribeRecording then falls back to the direct production-MCP
+ * `search_smart` path (never a hard blocker).
  */
 export function resolveBackendUrl(apiUrl?: string): string | null {
   return resolveApiUrl(apiUrl);
@@ -78,7 +87,11 @@ export async function transcribeRecording(
   const base = resolveApiUrl(apiUrl);
   const trimmedClient = (clientText ?? "").trim();
   if (!base) {
-    return finish(trimmedClient, "none", null, [], "no backend URL (set EXPO_PUBLIC_API_URL)");
+    // Direct-cloud fallback: no local backend configured — resolve the
+    // user's own query text against the live production MCP instead of
+    // blocking. Never a hard error; never a fabricated transcript (only
+    // the user's own words are resolved).
+    return searchSmartResolve(trimmedClient, undefined, undefined);
   }
 
   const controller = new AbortController();

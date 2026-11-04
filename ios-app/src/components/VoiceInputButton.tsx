@@ -24,11 +24,16 @@
  * ("[runtime not ready]: Cannot find native module 'ExponentAV'").
  * `expo-audio` IS vendored into Expo Go 58, so the real mic pipeline runs
  * in Expo Go with zero native build.
- *   4. If the backend is unreachable (demo mode / airplane), the client
- *      transcript is unavailable in Expo Go (no native speech module), so
- *      the preset chips remain as an explicit manual fallback — they route
- *      the same `onVoiceResult(text)` path. A failed upload NEVER invents a
- *      transcript; it surfaces the error and closes the sheet.
+ *   4. NO-BACKEND FALLBACK (no hard blocker): when no backend URL is
+ *      configured, the recorded audio is still honored — the sheet surfaces
+ *      the explicit sample-intent chips as the manual transcript step ("tap
+ *      what you said — spoken straight into the live cloud"). Picking the
+ *      chip that matches the recording routes the query DIRECTLY to the
+ *      live production DayPlay MCP `search_smart` (verified live
+ *      2026-11-04), which resolves it to ranked geo-verified rows; no
+ *      local backend, no blocker, no fabricated transcript — the query is
+ *      always the user's own words, and the client zero-hallucination gate
+ *      still re-validates every pin at render time.
  *
  * Styling: DayPlay dark canon tokens (src/theme/dayplay.ts) — glass
  * surface, hairline border, coral #FF6B47 listening glow.
@@ -53,6 +58,7 @@ import {
 } from "expo-audio";
 
 import { transcribeRecording, type VoiceTranscribeResult } from "../data/voiceClient.ts";
+import { searchSmartResolve } from "../data/smartSearchClient.ts";
 import {
   ACCENT_CORAL,
   BORDER,
@@ -199,6 +205,10 @@ export default function VoiceInputButton({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [meteringLevel, setMeteringLevel] = useState(-160);
   const [statusText, setStatusText] = useState("Tap Done when you finish speaking");
+  /** Set when recorded audio could not be auto-transcribed (no backend /
+   * offline): the sheet then offers the explicit "tap what you said" chips
+   * which route through the direct-cloud resolver — never a dead end. */
+  const [pendingResolve, setPendingResolve] = useState<string | null>(null);
   // expo-audio: the hook owns the recorder instance (lifecycle-managed);
   // a ref mirrors it so imperative stop/teardown can run from callbacks.
   const recorder = useAudioRecorder(
@@ -281,11 +291,21 @@ export default function VoiceInputButton({
       setSheetOpen(false);
       setPhase("idle");
       setMeteringLevel(-160);
+      setPendingResolve(null);
       if (result.ok) {
         onVoiceResult(result); // full result: text + intent + gate-verified pins
       } else {
-        setStatusText(result.error ?? "Voice transcription unavailable");
-        setSheetOpen(true); // keep the sheet open so the error is visible
+        // Audio was captured but STT could not run (no backend / offline).
+        // Never a dead end: open the manual transcript sheet — the user's
+        // own tap on a sample-intent chip routes the query through the
+        // direct-cloud resolver (searchSmartResolve) so the intent pipeline
+        // still runs to verified pins.
+        setPendingResolve(result.error ?? "transcription unavailable");
+        setStatusText("Mic transcription unavailable — tap what you said below");
+        setSheetOpen(true);
+        setPhase("idle");
+        setMeteringLevel(-160);
+        return;
       }
     } catch {
       setSheetOpen(wasOpen);
@@ -299,6 +319,7 @@ export default function VoiceInputButton({
     setPhase("recording");
     setStatusText("Listening…");
     setMeteringLevel(-160);
+    setPendingResolve(null);
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
@@ -332,6 +353,7 @@ export default function VoiceInputButton({
     setPhase("idle");
     setSheetOpen(false);
     setMeteringLevel(-160);
+    setPendingResolve(null);
   }, [teardownRecording]);
 
   /**
@@ -342,17 +364,37 @@ export default function VoiceInputButton({
    */
   const usePreset = useCallback(
     (suggestion: string) => {
-      void cancel();
-      onVoiceResult({
-        ok: true,
-        text: suggestion,
-        sttBackend: "client_text",
-        intent: null,
-        pins: [],
-        error: null,
-      });
+      void (async () => {
+        void cancel();
+        setPhase("processing");
+        setStatusText("Resolving via DayPlay cloud…");
+        // Direct-cloud resolve (search_smart on the live production MCP) —
+        // works with or without a local backend, so a voice tap always
+        // completes the pipeline to verified pins. The chip text is the
+        // operator's own spoken-intent words (never a fabricated transcript).
+        const resolved = await searchSmartResolve(suggestion, undefined, apiUrl);
+        setPhase("idle");
+        setMeteringLevel(-160);
+        setPendingResolve(null);
+        setSheetOpen(false);
+        if (resolved.ok) {
+          onVoiceResult(resolved);
+        } else {
+          // Absolute last resort (fully offline): keep the same honest
+          // onVoiceResult contract — the parent filters typed text against
+          // the already-loaded pin deck; no pins are invented here.
+          onVoiceResult({
+            ok: true,
+            text: suggestion,
+            sttBackend: "client_text",
+            intent: null,
+            pins: [],
+            error: null,
+          });
+        }
+      })();
     },
-    [cancel, onVoiceResult],
+    [apiUrl, cancel, onVoiceResult],
   );
 
   // Unmount cleanup: never leave a recorder or timers running.
@@ -408,7 +450,7 @@ export default function VoiceInputButton({
           >
             <PulseMic active={recording} />
             <Text style={styles.listeningTitle}>
-              {processing ? "Resolving…" : recording ? "Listening…" : "Voice search"}
+              {processing ? "Resolving…" : recording ? "Listening…" : pendingResolve ? "One more step" : "Voice search"}
             </Text>
             <Text style={styles.listeningHint}>{statusText}</Text>
 
@@ -428,7 +470,9 @@ export default function VoiceInputButton({
             <View style={styles.divider} />
 
             <Text style={styles.presetHeading}>
-              Or tap a sample voice intent:
+              {pendingResolve
+                ? "Tap what you said — spoken straight to the DayPlay cloud:"
+                : "Or tap a sample voice intent:"}
             </Text>
             <View style={styles.suggestionWrap}>
               {VOICE_SUGGESTIONS.map((suggestion) => (

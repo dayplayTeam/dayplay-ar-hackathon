@@ -10,7 +10,7 @@
  *   1. valid non-empty `listing_id` (string, trimmed non-blank)
  *   2. numeric `lat` and `lng` (finite, not NaN, not boolean-coerced)
  *   3. non-empty `title` — accepted from `name` (contract field) or `title`
- *   4. `distance <= max_range_meters` (default 500 m)
+ *   4. `distance <= max_range_meters` (default 1200 m — walk radius)
  *
  * Additional server-parity checks applied here (defense in depth for the
  * untrusted network boundary — the server already enforces these, the client
@@ -24,8 +24,9 @@
 import { distanceMeters } from './distance.ts';
 import type { LatLng, GateReason, GateResult, SpatialPin, ValidatedPin } from './internal.ts';
 
-/** Default maximum render range in meters. */
-export const MAX_RANGE_METERS = 500.0;
+/** Default maximum render range in meters — the 1200 m walk radius
+ * (a ~15 min brisk walk at ~80 m/min; owner-set 2026-11-04). */
+export const MAX_RANGE_METERS = 1200.0;
 
 /** SF Bay Area bounds, [minLat, maxLat, minLng, maxLng] — backend/validator.py SF_BOUNDS. */
 export const SF_BOUNDS: readonly [number, number, number, number] = [
