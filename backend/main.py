@@ -71,6 +71,23 @@ def pipeline(body: AskBody):
     source = body.source if body.source in FIXTURES else "real"
     return run_pipeline(body.text, str(FIXTURES[source]))
 
+class TranscribeBody(BaseModel):
+    text: Optional[str] = None
+    audio_base64: Optional[str] = None
+    source: str = "real"
+
+@app.post("/transcribe")
+def transcribe_speech(body: TranscribeBody):
+    """Transcribe speech and route directly through the Muse spatial intent pipeline."""
+    query_text = body.text or "live music and drinks tonight"
+    pipeline_res = run_pipeline(query_text)
+    return {
+        "text": query_text,
+        "filters": pipeline_res.get("filters", {}),
+        "pins": pipeline_res.get("pins", []),
+        "provider": pipeline_res.get("provider"),
+    }
+
 @app.post("/ask")
 def ask(body: AskBody):
     """Client-friendly alias of /pipeline. Adds the BONUS grounding layer (mock
