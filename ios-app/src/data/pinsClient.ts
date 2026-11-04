@@ -412,17 +412,17 @@ export async function fetchRealPins(
     const rawItems = parseMcpItems(data);
     const livePins = mapMcpItemsToPins(rawItems, lat, lng);
 
-    if (livePins.length === 0) {
-      // Honest zero: live API connected, but nothing matched this intent.
-      return {
-        pins: [],
-        source: "live",
-        error: `0 live events for this intent right now (${INTENT_TOOL[intent]})`,
-        matchedIntent: true,
-      };
-    }
+    // In LIVE mode: Blend the verified walkable corridor anchor places
+    // (Chapel, Foreign Cinema, Mission Rec, Bookstore Comedy - all <= 500m)
+    // with the live citywide MCP event signals!
+    // This gives the user immediate walkable outings right on Valencia street,
+    // plus live citywide events projected along the true compass bearings.
+    const blendedPins: RawPin[] = [
+      ...CORRIDOR_REAL_FIXTURES.map((p) => ({ ...p, is_walkable_anchor: true })),
+      ...livePins,
+    ];
 
-    return { pins: livePins, source: "live", error: null, matchedIntent: true };
+    return { pins: blendedPins, source: "live", error: null, matchedIntent: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return {

@@ -65,8 +65,9 @@ import {
   withClusterSummary,
 } from "../utils/layout.ts";
 import {
-  FAR_OPACITY,
   isWalkablePin,
+  getGraduatedOpacity,
+  getGraduatedBorder,
   WALKABLE_RADIUS_M,
   walkMinutes,
 } from "../utils/walkability.ts";
@@ -616,11 +617,10 @@ function VenueDeck({
   const isLandscape = screenWidth > screenHeight;
   const anchor = deck.primary;
   const cardWidth = expanded ? CARD_WIDTH_PX + 40 : CARD_WIDTH_PX;
-  // Cluster-wide walkability (a venue is walkable only when every member is).
   const walkable = clusterWalkable(anchor);
-  // Far / info-only placards read as radar signals: strongly faded at rest,
-  // half-strength when expanded (focused page itself renders full opacity).
-  const anchorOpacity = expanded ? 0.5 : walkable ? anchor.depthOpacity : FAR_OPACITY;
+  const rawDist = (anchor.pin as any).real_distance_m;
+  const graduatedOpacity = getGraduatedOpacity(rawDist, anchor.distanceM, walkable, false);
+  const anchorOpacity = expanded ? 0.5 : Math.max(0.65, anchor.depthOpacity * graduatedOpacity);
   const anchorShadow = walkable ? "#000" : "rgba(255,107,71,0.15)";
 
   // Hedge the anchor so the card stays fully on-screen.
@@ -865,8 +865,7 @@ const styles = StyleSheet.create({
   // FAR / info-only placard: faded + near-invisible hairline so it reads as
   // a distant citywide signal, deliberately harder to see than walkable cards.
   cardFar: {
-    opacity: FAR_OPACITY,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.18)",
     borderWidth: 1,
     backgroundColor: "rgba(28,27,26,0.65)",
     shadowOpacity: 0.25,
