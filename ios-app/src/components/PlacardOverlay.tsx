@@ -123,6 +123,9 @@ export interface PlacardOverlayProps {
   /** True-North heading in degrees [0, 360), or null until compass locks. */
   userHeading: number | null;
   devicePitch?: number | null;
+  /** When true and zero placards survive, render the Honest-Zero empty-state
+   * card ("0 verified places found...") instead of a silent blank viewport. */
+  showEmptyState?: boolean;
   screenWidth: number;
   screenHeight: number;
   /** Optional per-frame stats for the HUD placard counter. */
@@ -225,16 +228,26 @@ export function buildPlacards(
   // 4a. Screen pixel mapping + distance-based vertical placement.
   // Landscape phones (~800-930 x ~390-430px): horizon sits a touch lower and
   // the near-pin band compresses so cards never clip off the short bottom edge.
-  // Pitch & Altitude compensation: when viewing from an elevated position (highrise),
-  // device tilts downward (pitch > 0 deg). Offset horizon up so street pins project downward naturally.
-  // Standard handheld pitch is ~60-70 deg vertical; looking down from highrise is 20-50 deg.
-  const pitchOffset = devicePitch !== null && devicePitch !== undefined 
-    ? clamp((devicePitch - 60) * 4.5, -screenHeight * 0.35, screenHeight * 0.35) 
-    : 0;
-
+  // Pitch compensation (elevated / highrise viewpoint). devicePitch is the
+  // camera tilt above level in degrees [0, 90]: 0 = handheld vertical (true
+  // horizon crosses the screen band), 90 = looking straight down. As the
+  // camera aims at the ground the real horizon rises off the top of the
+  // frame, so horizonY moves UP with pitch and the near-pin band stretches
+  // downward — ground-level places stay mapped to the ground instead of
+  // floating mid-air on the static band. null (no motion fix) = static band.
+  const pitchNorm =
+    devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
+      ? clamp(devicePitch, 0, 90) / 90
+      : 0;
   const baseHorizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
-  const horizonY = baseHorizonY - pitchOffset;
-  const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
+  const pitchOffset = pitchNorm * screenHeight * 0.5;
+  const horizonY = Math.max(12, baseHorizonY - pitchOffset);
+  // Steeper viewpoint -> the ground plane fills more of the frame, so the
+  // near-pin band stretches up to +50% to keep near pins low on screen.
+  const spread =
+    screenHeight *
+    (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT) *
+    (1 + 0.5 * pitchNorm);
   const maxScreenY = Math.max(12, screenHeight - CARD_HEIGHT_PX - 24);
 
   const projected: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
@@ -619,6 +632,7 @@ export default function PlacardOverlay({
   userPosition,
   userHeading,
   devicePitch,
+  showEmptyState = false,
   screenWidth,
   screenHeight,
   isLandscape = false,
@@ -640,7 +654,22 @@ export default function PlacardOverlay({
     });
   }, [onStats, pins.length, placed.length, rejected.length, decks.length]);
 
-  if (decks.length === 0) return null;
+  if (decks.length === 0) {
+    // Honest-Zero: a filter that maps to zero verified places says so —
+    // no fabricated fallback pins, no silent blank viewport.
+    if (!showEmptyState) return null;
+    return (
+      <View pointerEvents="none" style={styles.honestZeroWrap}>
+        <View style={styles.honestZeroCard}>
+          <Text style={styles.honestZeroEmoji}>◎</Text>
+          <Text style={styles.honestZeroTitle}>
+            0 verified places found within walk radius.
+          </Text>
+          <Text style={styles.honestZeroSub}>Try adjusting your query or filter.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
