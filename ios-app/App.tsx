@@ -55,6 +55,11 @@ function normalizeHeading(raw: number | null | undefined): number | null {
   return deg === 360 ? 359 : deg;
 }
 
+/** Clamps v into [-1, 1] (asin-domain guard for noisy motion samples). */
+function clampAbsOne(v: number): number {
+  return Math.min(1, Math.max(-1, v));
+}
+
 /** True once both watchers have delivered at least one usable fix. */
 function rigReady(rig: Rig): boolean {
   return rig.gpsStatus === "locked" && rig.headingStatus === "locked";
@@ -127,10 +132,11 @@ function ArCameraScreen() {
     if (pinSource === "demo") {
       setPinSource("live");
       setLoadingPins(true);
-    void fetchRealPins().then((result) => {
+      void fetchRealPins().then((result) => {
         setPins(result.pins);
         setPinSource(result.source);
         setPinSourceNote(result.error); // failed live fetch silently reverts to demo data
+        setLoadingPins(false);
       });
     } else {
       setPinSource("demo");
@@ -180,9 +186,9 @@ function ArCameraScreen() {
 
   const onExpandBar = useCallback(() => setBarCollapsed(false), []);
 
-  // Client-side intent filtering: chips + free-text keywords narrow the
-  // pins handed to the placard overlay; unmatched queries fall back to the
-  // primary demo pins with an intent banner.
+  // Client-side intent filtering (single authority: active chip XOR free
+  // text). Honest-Zero: an unmatched query maps to zero pins — the overlay
+  // says so via the empty-state card; no fabricated fallback pins.
   const filtered = filterPins(pins, activeChip, submittedQuery);
   // Voice origin: the last submitted query came from the voice input stream.
   const voiceOrigin =
@@ -285,6 +291,51 @@ function ArCameraScreen() {
     };
   }, [startSensors]);
 
+  // Pitch rig (elevated / highrise viewpoint compensation): DeviceMotion
+  // supplies gravity + acceleration in m/s^2; the down-tilt above level is
+  // derived from the gravity vector alone. Phone flat vertical (handheld
+  // AR pose) reads |gY| ~ 0 -> pitch 0; tilting the top edge down toward
+  // the ground grows |gY| up to g at face-down (pitch 90). Pitch feeds
+  // PlacardOverlay so horizonY / card band track the true ground direction
+  // instead of a static screen band. Motion permission is requested
+  // separately (iOS motion gates are independent of camera/location); on
+  // denial or sensor absence the overlay keeps its static band.
+  useEffect(() => {
+    let cancelled = false;
+    let sub: { remove: () => void } | null = null;
+
+    void (async () => {
+      try {
+        const existing = await DeviceMotion.getPermissionsAsync();
+        if (!existing.granted) {
+          const req = await DeviceMotion.requestPermissionsAsync();
+          if (!req.granted) return;
+        }
+        const available = await DeviceMotion.isAvailableAsync();
+        if (cancelled || !available) return;
+
+        DeviceMotion.setUpdateInterval(200); // 5 Hz — plenty for horizon drift
+        sub = DeviceMotion.addListener((motion) => {
+          const g = motion.accelerationIncludingGravity;
+          if (!g || !Number.isFinite(g.x) || !Number.isFinite(g.y) || !Number.isFinite(g.z)) return;
+          const magnitude = Math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z);
+          if (!Number.isFinite(magnitude) || magnitude === 0) return;
+          const cosPitch = clampAbsOne(g.y / magnitude);
+          const pitchDeg = (Math.asin(cosPitch) * 180) / Math.PI; // 0..90
+          setRigRef.current((prev) => ({ ...prev, pitch: pitchDeg }));
+        });
+      } catch {
+        // Motion unavailable (older device / denied / Expo Go limitation):
+        // static horizon band stays — compensation degrades gracefully.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
+  }, []);
+
   const cameraGranted = cameraPermission?.granted ?? false;
 
   return (
@@ -307,6 +358,8 @@ function ArCameraScreen() {
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         isLandscape={screenWidth > screenHeight}
+        devicePitch={rig.pitch}
+        showEmptyState={!loadingPins}
         onStats={onOverlayStats}
       />
 
@@ -347,6 +400,23 @@ function ArCameraScreen() {
           }}
         />
       </View>
+
+      {/* Live loading visualization: radar pulse while pins resolve (launch
+          or live refresh). Placards render the instant the fetch lands. */}
+      {loadingPins ? (
+        <View pointerEvents="none" style={[styles.loadingPulseWrap, isLandscape ? styles.loadingPulseWrapLandscape : null]}>
+          <View style={styles.loadingPulseCard}>
+            <View style={styles.radarRings}>
+              <View style={styles.radarRing} />
+              <View style={styles.radarRingInner} />
+            </View>
+            <View style={styles.loadingPulseTextWrap}>
+              <Text style={styles.loadingPulseTitle}>📡 Resolving live Dayplay MCP intent...</Text>
+              <Text style={styles.loadingPulseSub}>Verifying real places against the walk radius</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       {/* Intent fallback banner — shown when a query maps to demo pins. */}
       {intentBanner ? (
@@ -434,9 +504,11 @@ const CHIP_KEYWORDS: Record<string, string[]> = {
 };
 
 /**
- * Client-side intent filter for the M1 input bar: chip / keyword match on
- * pin name + kind. When nothing matches a non-empty query, fall back to
- * the demo intent pins so the demo always shows relevant pins.
+ * Client-side intent filter for the M1 input bar: single-authority match on
+ * pin name + kind — an active chip drives the filter unless a non-empty
+ * free-text query is submitted (text always wins). Honest-Zero: whatever
+ * matched is returned as-is; zero matches surface zero pins plus the
+ * Honest-Zero card, never fabricated fallback pins.
  */
 function filterPins(pins: RawPin[], chip: string | null, query: string): { pins: RawPin[]; fellBack: boolean } {
   const keywords = queryKeywords(query);
@@ -482,22 +554,40 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     alignItems: "center",
-    zIndex: 10,
   },
+  loadingPulseWrapLandscape: { top: "24%" },
   loadingPulseCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     backgroundColor: "rgba(28,27,26,0.92)",
     borderColor: "rgba(255,107,71,0.5)",
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    alignItems: "center",
-    gap: 4,
     shadowColor: "#000",
     shadowOpacity: 0.5,
     shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    borderTopColor: "rgba(255,255,255,0.07)",
   },
-  loadingPulseEmoji: { fontSize: 20 },
+  radarRings: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  radarRing: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: "rgba(255,107,71,0.55)",
+  },
+  radarRingInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,107,71,0.85)",
+  },
+  loadingPulseTextWrap: { gap: 2 },
   loadingPulseTitle: { color: "#FF6B47", fontSize: 13, fontWeight: "700" },
   loadingPulseSub: { color: "#A19D97", fontSize: 11 },
   intentBanner: {
