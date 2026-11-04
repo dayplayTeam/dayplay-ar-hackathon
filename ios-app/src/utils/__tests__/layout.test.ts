@@ -126,6 +126,7 @@ function placed(
     bearingDeg: 0,
     depthScale: 1,
     depthOpacity: 1,
+    isWalkable: true,
     clusterCount: 1,
     clusterPins: [],
   };

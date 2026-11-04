@@ -64,6 +64,12 @@ import {
   STACK_GAP_PX,
   withClusterSummary,
 } from "../utils/layout.ts";
+import {
+  FAR_OPACITY,
+  isWalkablePin,
+  WALKABLE_RADIUS_M,
+  walkMinutes,
+} from "../utils/walkability.ts";
 
 /** Unverified pin as received from the network or the bundled fixture. */
 export interface RawPin {
@@ -104,6 +110,10 @@ export interface PlacedPlacard {
   depthScale: number;
   /** Visual opacity (1.0 = closest, 0.55 = far edge). */
   depthOpacity: number;
+  /** True when the venue is genuinely walkable from the user (no corridor
+   * remap beyond the 500 m walk radius). False = far/citywide radar pin:
+   * rendered faded + info-only so judges can tell at a glance. */
+  isWalkable: boolean;
   /** Total pins in this venue cluster (1 = plain single pin). */
   clusterCount: number;
   /** Other pins in this cluster, primary first, for the expanded deck. */
@@ -181,6 +191,27 @@ function kindLabel(kind: string): string {
 /** Kind chip accent color — quick at-a-glance category coding. */
 function kindColor(kind: string): string {
   return KIND_COLORS[kind] ?? "#34D399";
+}
+
+/** isWalkablePin for a RawPin: real_distance_m rides the index signature. */
+function pinWalkable(pin: RawPin): boolean {
+  const real = pin.real_distance_m;
+  return isWalkablePin(
+    typeof real === "number" ? real : undefined,
+    typeof pin.distanceM === "number" ? pin.distanceM : (real as number | undefined) ?? Number.POSITIVE_INFINITY,
+  );
+}
+
+/**
+ * Cluster-wide walkability: a venue is walkable only when EVERY member is.
+ * One far remapped session inside a walkable cluster must not read as a
+ * short walk.
+ */
+function clusterWalkable(placard: PlacedPlacard): boolean {
+  return (
+    placard.isWalkable &&
+    placard.clusterPins.every((p) => pinWalkable(p))
+  );
 }
 
 /**
@@ -272,6 +303,10 @@ export function buildPlacards(
       bearingDeg: projected.bearingDeg,
       depthScale,
       depthOpacity,
+      isWalkable: isWalkablePin(
+        typeof pin.real_distance_m === "number" ? pin.real_distance_m : undefined,
+        projected.distanceM,
+      ),
       clusterCount: 1,
       clusterPins: [],
     };
@@ -372,6 +407,24 @@ function DistanceChip({ meters, realMeters }: { meters: number; realMeters?: num
   );
 }
 
+/** Faded "far away" chip: honest info-only signal on unwalkable placards. */
+function FarChip() {
+  return (
+    <View style={styles.farChip}>
+      <Text style={styles.farChipText}>◇ FAR · INFO-ONLY</Text>
+    </View>
+  );
+}
+
+/** Coral "walkable" chip: at-a-glance walkable outing marker. */
+function WalkableChip({ minutes }: { minutes: number }) {
+  return (
+    <View style={styles.walkableChip}>
+      <Text style={styles.walkableChipText}>🚶 {minutes} MIN WALK</Text>
+    </View>
+  );
+}
+
 /* ----------------------------------------------------------------- cards */
 
 /** Collapsed single-venue card: chips row, title, distance + cluster badge. */
@@ -383,20 +436,28 @@ function VenueCard({
   onPress: () => void;
 }) {
   const moreCount = placard.clusterCount - 1;
+  // Cluster-wide walkability: a venue is walkable only when EVERY member is
+  // (one far remapped session inside a walkable cluster must not read as a
+  // short walk).
+  const walkable = clusterWalkable(placard);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${placard.pin.name}, ${formatDistance(placard.distanceM)} away${
-        moreCount > 0 ? `, plus ${moreCount} more activities` : ""
-      }`}
+        walkable ? `, about ${walkMinutes(placard.distanceM)} minute walk` : ", too far to walk, info only"
+      }${moreCount > 0 ? `, plus ${moreCount} more activities` : ""}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.card,
+        walkable ? styles.cardWalkable : styles.cardFar,
+        pressed && styles.cardPressed,
+      ]}
     >
       <View style={styles.cardTopRow}>
         <KindChip kind={placard.pin.kind} />
         <BearingChip bearingDeg={placard.bearingDeg} />
       </View>
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={[styles.title, !walkable && styles.titleFar]} numberOfLines={2}>
         {placard.pin.name}
       </Text>
       <View style={styles.cardBottomRow}>
@@ -406,6 +467,13 @@ function VenueCard({
             <Text style={styles.moreBadgeText}>+{moreCount} more activities</Text>
           </View>
         ) : null}
+      </View>
+      <View style={styles.statusRow}>
+        {walkable ? (
+          <WalkableChip minutes={walkMinutes(placard.distanceM)} />
+        ) : (
+          <FarChip />
+        )}
       </View>
     </Pressable>
   );
@@ -432,13 +500,14 @@ function DetailPage({
   onClose: () => void;
 }) {
   const startsAt = formatStartsAt(placard.pin.starts_at);
+  const walkable = placard.isWalkable;
   const body = (
     <>
       <View style={styles.cardTopRow}>
         <KindChip kind={placard.pin.kind} />
         <BearingChip bearingDeg={placard.bearingDeg} />
       </View>
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={[styles.title, !walkable && styles.titleFar]} numberOfLines={2}>
         {placard.pin.name}
       </Text>
       {startsAt ? <Text style={styles.metaLine}>🗓 {startsAt}</Text> : null}
@@ -450,6 +519,13 @@ function DetailPage({
           </Text>
         </View>
       </View>
+      <View style={styles.statusRow}>
+        {walkable ? (
+          <WalkableChip minutes={walkMinutes(placard.distanceM)} />
+        ) : (
+          <FarChip />
+        )}
+      </View>
     </>
   );
 
@@ -459,7 +535,12 @@ function DetailPage({
         accessibilityRole="button"
         accessibilityLabel={`${placard.pin.name}, tap to focus`}
         onPress={onPress}
-        style={({ pressed }) => [styles.card, styles.cardExpanded, pressed && styles.cardPressed]}
+        style={({ pressed }) => [
+          styles.card,
+          styles.cardExpanded,
+          walkable ? styles.cardWalkable : styles.cardFar,
+          pressed && styles.cardPressed,
+        ]}
       >
         {body}
       </Pressable>
@@ -467,17 +548,28 @@ function DetailPage({
   }
 
   return (
-    <View style={[styles.card, styles.cardExpanded, styles.cardFocused]}>
+    <View
+      style={[
+        styles.card,
+        styles.cardExpanded,
+        styles.cardFocused,
+        walkable ? styles.cardWalkable : styles.cardFar,
+      ]}
+    >
       {body}
       <View style={styles.actionsRow}>
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel="Open walking directions in Maps"
+          accessibilityLabel={
+            walkable ? "Open walking directions in Maps" : "Open map to this far venue"
+          }
           hitSlop={6}
           onPress={() => void Linking.openURL(directionsUrl(placard.pin))}
           style={styles.directionsButton}
         >
-          <Text style={styles.directionsButtonText}>Directions →</Text>
+          <Text style={styles.directionsButtonText}>
+            {walkable ? "Directions →" : "View on Map →"}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -524,6 +616,12 @@ function VenueDeck({
   const isLandscape = screenWidth > screenHeight;
   const anchor = deck.primary;
   const cardWidth = expanded ? CARD_WIDTH_PX + 40 : CARD_WIDTH_PX;
+  // Cluster-wide walkability (a venue is walkable only when every member is).
+  const walkable = clusterWalkable(anchor);
+  // Far / info-only placards read as radar signals: strongly faded at rest,
+  // half-strength when expanded (focused page itself renders full opacity).
+  const anchorOpacity = expanded ? 0.5 : walkable ? anchor.depthOpacity : FAR_OPACITY;
+  const anchorShadow = walkable ? "#000" : "rgba(255,107,71,0.15)";
 
   // Hedge the anchor so the card stays fully on-screen.
   const left = clamp(anchor.screenX, cardWidth / 2 + 8, screenWidth - cardWidth / 2 - 8);
@@ -553,12 +651,13 @@ function VenueDeck({
           {
             left: leftFinal,
             top,
-            opacity: anchor.depthOpacity,
+            opacity: anchorOpacity,
+            shadowColor: anchorShadow,
             transform: [{ translateX: -cardWidth / 2 }, { scale: anchor.depthScale }],
           },
         ]}
       >
-        <VenueCard placard={anchor} onPress={() => { setFocusIndex(0); setExpanded(true); }} />
+        <VenueCard placard={anchor} onPress={() => { if (walkable) { setFocusIndex(0); setExpanded(true); } }} />
       </View>
     );
   }
@@ -584,15 +683,17 @@ function VenueDeck({
         onPress={() => setExpanded(false)}
         style={styles.backdrop}
       />
-      {/* Focused page at the venue anchor — full opacity/scale regardless of
-          distance so the card being read is never attenuated. */}
+      {/* Focused page at the venue anchor — full opacity/scale for walkable
+          venues so the card being read is never attenuated; far venues hold
+          half strength (info-only radar signal, never masquerades as near). */}
       <View
         style={[
           styles.anchorWrap,
           {
             left: leftFinal,
             top,
-            opacity: 1,
+            opacity: walkable ? 1 : 0.5,
+            shadowColor: walkable ? "#000" : "rgba(255,107,71,0.15)",
             transform: [{ translateX: -cardWidth / 2 }, { scale: 1 }],
           },
         ]}
@@ -751,6 +852,64 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     // Subtle inner glow: brighter 1px top edge.
     borderTopColor: "rgba(255,255,255,0.07)",
+  },
+  // WALKABLE placard: DayPlay coral stroke + vivid glass. The outline reads
+  // as "this is a real outing you can walk to right now" (orange stroke per
+  // the visual-differentiation spec).
+  cardWalkable: {
+    borderColor: "rgba(255,107,71,0.85)",
+    borderWidth: 1.5,
+    shadowColor: "rgba(255,107,71,0.35)",
+    shadowOpacity: 0.55,
+  },
+  // FAR / info-only placard: faded + near-invisible hairline so it reads as
+  // a distant citywide signal, deliberately harder to see than walkable cards.
+  cardFar: {
+    opacity: FAR_OPACITY,
+    borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    backgroundColor: "rgba(28,27,26,0.65)",
+    shadowOpacity: 0.25,
+  },
+  titleFar: { color: TEXT_SECONDARY },
+  // Status chips row (walkable / far badge sits under the distance row).
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  walkableChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: CORAL_TINT,
+    borderWidth: 1,
+    borderColor: "rgba(255,107,71,0.6)",
+  },
+  walkableChipText: {
+    color: ACCENT_CORAL,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    fontVariant: ["tabular-nums"],
+  },
+  farChip: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  farChipText: {
+    color: TEXT_SECONDARY,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    fontVariant: ["tabular-nums"],
   },
   cardFocused: {
     borderColor: "rgba(255,107,71,0.6)",

@@ -10,6 +10,7 @@ import HudBar, { type HudBarProps } from "./src/components/HudBar.tsx";
 import InputFilterBar from "./src/components/InputFilterBar.tsx";
 import type { RawPin } from "./src/components/PlacardOverlay.tsx";
 import { CORRIDOR_REAL_FIXTURES, fetchRealPins, type PinSource } from "./src/data/pinsClient.ts";
+import type { VoiceTranscribeResult } from "./src/data/voiceClient.ts";
 
 /** Live telemetry from the phone's GPS + compass rig. */
 type Rig = {
@@ -209,8 +210,32 @@ function ArCameraScreen() {
     setVoiceQuery(null);
   }, []);
 
-  const onVoiceQuery = useCallback((query: string) => {
+  // Real voice pipeline (Muse tool loop): the transcript comes from the
+  // backend /transcribe round-trip (whisper.cpp STT -> Muse intent -> gate),
+  // so the resolved pins are gate-verified — swap them in live. The query
+  // still populates the search field + banner so judges see voice -> filter.
+  const onVoiceResult = useCallback((result: VoiceTranscribeResult) => {
+    if (!result.ok) {
+      // No fabricated transcript — surface the honest state and keep the
+      // previous filter authority untouched.
+      setPinSourceNote(`🎙️ Voice: ${result.error ?? "transcription unavailable"}`);
+      return;
+    }
+    const query = result.text;
     setVoiceQuery(query);
+    setSearchQuery(query);
+    setSubmittedQuery(query);
+    setActiveChip(null); // Voice text takes filter authority, like a typed query
+    if (result.pins.length > 0) {
+      // Backend-resolved, gate-verified pins for the voice intent.
+      setPins(result.pins);
+      setPinSource("live");
+      setPinSourceNote(
+        `🎙️ Voice intent resolved via Muse (${result.sttBackend}): ` +
+        `${result.pins.length} verified pins` +
+        (result.intent?.time_window ? `, window=${result.intent.time_window}` : ""),
+      );
+    }
   }, []);
 
   const onExpandBar = useCallback(() => setBarCollapsed(false), []);
@@ -490,7 +515,7 @@ function ArCameraScreen() {
           onChangeSearchQuery={onChangeSearchQuery}
           onSubmitQuery={onSubmitQuery}
           onClearFilter={onClearFilter}
-          onVoiceQuery={onVoiceQuery}
+          onVoiceResult={onVoiceResult}
           resultCount={filtered.pins.length}
           hidden={recView}
           collapsed={barCollapsed}

@@ -34,6 +34,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import VoiceInputButton from "./VoiceInputButton.tsx";
+import type { VoiceTranscribeResult } from "../data/voiceClient.ts";
 import {
   ACCENT_CORAL,
   BORDER,
@@ -71,8 +72,9 @@ export interface InputFilterBarProps {
   collapsed?: boolean;
   /** Expand from the collapsed pill. */
   onExpand?: () => void;
-  /** App-level voice capture hook — fires when a voice query is recognized. */
-  onVoiceQuery?: (query: string) => void;
+  /** App-level voice pipeline hook — receives the full transcribe result
+   * (text + Muse intent + gate-verified pins) from the VoiceInputButton. */
+  onVoiceResult?: (result: VoiceTranscribeResult) => void;
   /** Preloaded text inside the field (defaults to the demo query). */
   initialQuery?: string;
 }
@@ -123,7 +125,7 @@ export default function InputFilterBar({
   hidden = false,
   collapsed = false,
   onExpand,
-  onVoiceQuery,
+  onVoiceResult,
   initialQuery = "",
 }: InputFilterBarProps) {
   const [localQuery, setLocalQuery] = useState(searchQuery || initialQuery);
@@ -187,12 +189,13 @@ export default function InputFilterBar({
     onSelectChip(activeChip === chip ? null : chip);
   };
 
-  /** Voice capture: populate the field, route upstream, auto-submit the filter. */
-  const onVoiceResult = (query: string) => {
-    setLocalQuery(query);
-    onChangeSearchQuery(query);
-    onSubmitQuery(query);
-    onVoiceQuery?.(query);
+  /** Voice capture: populate the field and route the full pipeline result
+   * upstream. App owns the query state + pin swap; the bar mirrors the text. */
+  const onVoiceTranscribed = (result: VoiceTranscribeResult) => {
+    if (result.ok) {
+      setLocalQuery(result.text);
+    }
+    onVoiceResult?.(result);
   };
 
   return (
@@ -213,7 +216,7 @@ export default function InputFilterBar({
             autoCorrect={false}
             autoCapitalize="none"
           />
-          <VoiceInputButton onVoiceResult={onVoiceResult} />
+          <VoiceInputButton onVoiceResult={onVoiceTranscribed} />
           {localQuery.length > 0 ? (
             <Pressable
               accessibilityRole="button"
