@@ -235,20 +235,24 @@ export function buildPlacards(
   // frame, so horizonY moves UP with pitch and the near-pin band stretches
   // downward — ground-level places stay mapped to the ground instead of
   // floating mid-air on the static band. null (no motion fix) = static band.
-  // Pitch & Altitude Perspective Mapping:
-  // When holding phone upright looking at horizon: pitch is ~70°-90°.
-  // When pointing DOWN at the ground/floor (e.g. from a highrise): pitch is < 40°.
-  // Camera VFOV (vertical field of view) is ~50° (±25° from center).
-  // If pointing steeply down at the floor (< 38° pitch), horizontal street-level pins
-  // are outside the camera's vertical field of view and MUST be culled (not drawn at feet).
-  const isPointingAtFloor = devicePitch !== null && devicePitch !== undefined && devicePitch < 38;
-
-  // Pitch offset: tilting down shifts the horizon UPWARDS towards top of screen.
-  // When pitch is 80° (level horizon), pitchOffset = 0.
-  // When tilted down to 50°, horizon moves up by ~30° equivalent in screen pixels.
-  const pitchOffset = devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
-    ? (80 - clamp(devicePitch, 38, 90)) * (screenHeight / 50.0)
+  // Pitch & Altitude Perspective Mapping (Calibrated):
+  // True device pitch relative to horizontal horizon:
+  //   0°  = level horizon (looking straight ahead)
+  //  +20° = looking slightly down toward street from an elevated viewpoint
+  //  +60° = pointing steeply down at the floor/feet
+  //  -20° = looking up toward the sky
+  // iPhone rear camera VFOV is ~50° (half-angle ±25°).
+  // If pointing down at floor (pitch > 55°), horizontal street-level pins are
+  // outside the camera's vertical lens view and must be culled (not drawn at feet).
+  const pitchVal = devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
+    ? devicePitch
     : 0;
+
+  const isPointingAtFloor = pitchVal > 55;
+
+  // Horizon displacement: tilting down (pitch > 0) moves the visible horizon UP.
+  // 50° vertical FOV spans screenHeight pixels -> scale = screenHeight / 50.0.
+  const pitchOffset = clamp(pitchVal, -20, 50) * (screenHeight / 50.0);
 
   const baseHorizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
   const horizonY = baseHorizonY - pitchOffset;

@@ -347,11 +347,13 @@ function ArCameraScreen() {
         sub = DeviceMotion.addListener((motion) => {
           const g = motion.accelerationIncludingGravity;
           if (!g || !Number.isFinite(g.x) || !Number.isFinite(g.y) || !Number.isFinite(g.z)) return;
-          const magnitude = Math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z);
-          if (!Number.isFinite(magnitude) || magnitude === 0) return;
-          const cosPitch = clampAbsOne(g.y / magnitude);
-          const pitchDeg = (Math.asin(cosPitch) * 180) / Math.PI; // 0..90
-          setRigRef.current((prev) => ({ ...prev, pitch: pitchDeg }));
+          // True camera elevation/depression angle relative to horizontal:
+          // Phone upright facing horizon: g.y ≈ -9.8, g.z ≈ 0 -> pitch ≈ 0°
+          // Tilted down toward street (highrise): g.z < 0 -> pitch > 0° (depression angle)
+          // Pointing down at feet: g.z ≈ -9.8, g.y ≈ 0 -> pitch ≈ +90°
+          // Tilted up toward sky: g.z > 0 -> pitch < 0° (elevation angle)
+          const pitchDeg = (Math.atan2(-g.z, -g.y) * 180) / Math.PI;
+          setRigRef.current((prev) => ({ ...prev, pitch: Math.round(pitchDeg) }));
         });
       } catch {
         // Motion unavailable (older device / denied / Expo Go limitation):
