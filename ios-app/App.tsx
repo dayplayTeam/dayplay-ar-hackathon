@@ -113,6 +113,15 @@ function ArCameraScreen() {
   // REC VIEW: hudMode "minimized" hides the input bar for a pristine camera viewport.
   const recView = hudMode === "minimized";
 
+  // Effective ground truth the pin resolver targets: the SF Mission anchor
+  // while anchoring, else the live GPS fix (null until the rig locks; the
+  // resolver falls back to the anchor coordinates itself).
+  const effectiveUser = anchorToSf
+    ? { lat: SF_MISSION_ANCHOR.latitude, lng: SF_MISSION_ANCHOR.longitude }
+    : rig.latitude !== null && rig.longitude !== null
+      ? { lat: rig.latitude, lng: rig.longitude }
+      : null;
+
   useEffect(() => {
     let cancelled = false;
     setLoadingPins(true);
