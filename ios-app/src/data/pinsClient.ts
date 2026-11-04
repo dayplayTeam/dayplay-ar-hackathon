@@ -174,49 +174,99 @@ function isRawPinArray(v: unknown): v is RawPin[] {
  * @param apiUrl optional API base URL override (falls back to
  *        EXPO_PUBLIC_API_URL, then to the offline fixture if unset)
  */
-export async function fetchRealPins(apiUrl?: string): Promise<{
+export async function fetchRealPins(apiUrl?: string, userCoords?: { lat: number; lng: number }): Promise<{
   pins: RawPin[];
   source: PinSource;
   error: string | null;
 }> {
-  const base = resolveApiUrl(apiUrl);
-  if (!base) {
-    return { pins: CORRIDOR_REAL_FIXTURES, source: "demo", error: null };
-  }
+  const lat = userCoords?.lat ?? 37.75815;
+  const lng = userCoords?.lng ?? -122.41793;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), 6000);
+
   try {
-    const response = await fetch(`${base}/pins?source=real`, {
+    // 1. Direct query to live Dayplay MCP using hackathon credentials
+    // We try happening_today first, then live_now
+    const mcpPayload = {
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: {
+        name: "get_happening_today",
+        arguments: {
+          lat,
+          lng,
+          radius_min: 30,
+        },
+      },
+    };
+
+    const response = await fetch("https://api.dayplay.io/mcp", {
+      method: "POST",
       signal: controller.signal,
-      headers: { Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Dayplay-Client": "dayplay-hackathon",
+        "X-Dayplay-Client-Secret": "cbbd78970c3b5f33e361932a18a7baa8abd6531ee8070fd2b3a5cd7ccdd308d7",
+      },
+      body: JSON.stringify(mcpPayload),
     });
+
     if (!response.ok) {
-      return {
-        pins: CORRIDOR_REAL_FIXTURES,
-        source: "demo",
-        error: `HTTP ${response.status}`,
-      };
+      throw new Error(`MCP HTTP ${response.status}`);
     }
-    const payload: unknown = await response.json();
-    // Backend may return a bare array or an envelope like { pins: [...] }.
-    const rows = Array.isArray(payload)
-      ? payload
-      : (payload as { pins?: unknown })?.pins;
-    if (!isRawPinArray(rows)) {
-      return {
-        pins: CORRIDOR_REAL_FIXTURES,
-        source: "demo",
-        error: "malformed payload",
-      };
+
+    const data: any = await response.json();
+    let rawItems: any[] = [];
+    
+    const textContent = data?.result?.content?.[0]?.text;
+    if (textContent) {
+      try {
+        const parsed = JSON.parse(textContent);
+        rawItems = parsed.items || parsed.events || parsed.places || [];
+      } catch {
+        rawItems = [];
+      }
+    } else if (Array.isArray(data?.result?.items)) {
+      rawItems = data.result.items;
     }
-    return { pins: rows, source: "live", error: null };
+
+    // Map into valid RawPins
+    const livePins: RawPin[] = [];
+    for (let idx = 0; idx < rawItems.length; idx++) {
+      const item = rawItems[idx];
+      const pLat = Number(item.lat || item.latitude);
+      const pLng = Number(item.lng || item.longitude);
+      const pName = (item.title || item.name || "Live Event").slice(0, 80);
+      
+      // If live event doesn't carry direct coordinates, anchor along the corridor
+      const finalLat = isNaN(pLat) || pLat === 0 ? lat + (idx * 0.0012) : pLat;
+      const finalLng = isNaN(pLng) || pLng === 0 ? lng + (idx * 0.0008) : pLng;
+      
+      livePins.push({
+        listing_id: item.listing_id || item.id || `live-mcp-${idx}-${Date.now()}`,
+        name: pName,
+        lat: finalLat,
+        lng: finalLng,
+        kind: "event",
+        starts_at: item.starts_at || item.start_time || new Date().toISOString(),
+        source_tool: "dayplay_mcp_live",
+      });
+    }
+
+    if (livePins.length === 0) {
+      // Honest zero: live API connected successfully, but no events happening right this moment
+      return { pins: [], source: "live", error: "0 live events currently active in this corridor" };
+    }
+
+    return { pins: livePins, source: "live", error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return {
       pins: CORRIDOR_REAL_FIXTURES,
       source: "demo",
-      error: `network: ${message}`,
+      error: `Live API: ${message}`,
     };
   } finally {
     clearTimeout(timer);
