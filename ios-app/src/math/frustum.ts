@@ -101,3 +101,60 @@ export function projectPin(
     screenXNorm: screenXNorm(user.heading, brg),
   };
 }
+
+/**
+ * Camera pitch (depression/elevation angle) semantics for the vertical band.
+ *
+ * The DeviceMotion rig reports pitch as the camera's tilt relative to the
+ * HORIZONTAL plane, matching the calibrated convention (App.tsx):
+ *   0°  = upright, level horizon (handheld AR pose)
+ *  +20° = slightly down toward street from an elevated viewpoint
+ *  +60° = steeply down at the floor/feet
+ *  -20° = up toward the sky
+ *
+ * Culling (regression-locked after the 0/19 incident, 2026-11-04): the
+ * iPhone rear camera's ~50° VFOV spans about ±25° around the optical axis.
+ * Street-level pins sit on the horizontal ground plane ~90° below a
+ * downward-tilted axis, so once the axis depression exceeds half the VFOV
+ * (25°) plus a small handposture grace margin, the ground band is outside
+ * the lens entirely. Cull ONLY in that regime — an upright phone (0°) must
+ * never cull street pins. The earlier inverted reading of this threshold
+ * (< 38° "floor" on an upright=high-pitch scale) culled EVERY pin while the
+ * user held the phone normally, producing HUD "0/19 in FOV" over a blank
+ * viewport.
+ */
+
+/** Pitch (degrees, depression-positive) beyond which street pins are culled. */
+export const FLOOR_CULL_PITCH_DEG = 55;
+
+/** Camera vertical FOV used for horizon displacement mapping (degrees). */
+export const VFOV_DEG = 50;
+
+/** True when the camera is aimed so far down that street-level pins fall
+ * outside the vertical field of view. null/undefined/non-finite pitch
+ * (no motion fix) never culls — the static band stays. */
+export function isPointingAtFloor(pitchDeg: number | null | undefined): boolean {
+  if (pitchDeg === null || pitchDeg === undefined || !Number.isFinite(pitchDeg)) {
+    return false;
+  }
+  return pitchDeg > FLOOR_CULL_PITCH_DEG;
+}
+
+/**
+ * Screen-space horizon Y for the given pitch: tilting DOWN (pitch > 0)
+ * moves the visible horizon UP through the frame (the ground plane fills
+ * more of the view); tilting UP moves it down. 50° VFOV spans the screen
+ * height, so displacement = pitch * (screenHeight / 50). Clamped to ±50°
+ * so extreme tilts never push the horizon fully off-screen.
+ */
+export function horizonYForPitch(
+  pitchDeg: number | null | undefined,
+  baseHorizonY: number,
+  screenHeight: number,
+): number {
+  if (pitchDeg === null || pitchDeg === undefined || !Number.isFinite(pitchDeg)) {
+    return baseHorizonY;
+  }
+  const clamped = Math.min(50, Math.max(-20, pitchDeg));
+  return baseHorizonY - clamped * (screenHeight / VFOV_DEG);
+}

@@ -37,6 +37,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
+  horizonYForPitch,
+  isPointingAtFloor,
   MAX_RANGE_METERS,
   projectPin,
   validatePins,
@@ -75,6 +77,11 @@ export interface RawPin {
   lng: number;
   /** Pin kind per docs/spatial-contract.md: saved | event | plan_stop. */
   kind: string;
+  /** True walked distance in meters when the pin was corridor-remapped from
+   * beyond the walk radius (live citywide events). Rendered as an honest
+   * "3.5 km • Far" badge; absent for walk-radius pins (distanceM is then
+   * the real distance). Never guessed — only set from verified geo. */
+  real_distance_m?: number;
   [key: string]: unknown;
 }
 
@@ -235,32 +242,20 @@ export function buildPlacards(
   // frame, so horizonY moves UP with pitch and the near-pin band stretches
   // downward — ground-level places stay mapped to the ground instead of
   // floating mid-air on the static band. null (no motion fix) = static band.
-  // Pitch & Altitude Perspective Mapping (Calibrated):
-  // True device pitch relative to horizontal horizon:
-  //   0°  = level horizon (looking straight ahead)
-  //  +20° = looking slightly down toward street from an elevated viewpoint
-  //  +60° = pointing steeply down at the floor/feet
-  //  -20° = looking up toward the sky
-  // iPhone rear camera VFOV is ~50° (half-angle ±25°).
-  // If pointing down at floor (pitch > 55°), horizontal street-level pins are
-  // outside the camera's vertical lens view and must be culled (not drawn at feet).
-  const pitchVal = devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
-    ? devicePitch
-    : 0;
-
-  const isPointingAtFloor = pitchVal > 55;
-
-  // Horizon displacement: tilting down (pitch > 0) moves the visible horizon UP.
-  // 50° vertical FOV spans screenHeight pixels -> scale = screenHeight / 50.0.
-  const pitchOffset = clamp(pitchVal, -20, 50) * (screenHeight / 50.0);
+  // Pitch semantics (see math/frustum.ts isPointingAtFloor — regression-locked
+  // after the 0/19 incident): 0° = upright level horizon, +pitch = camera
+  // tilted DOWN. Street pins cull only when the optical axis depression
+  // exceeds half the camera VFOV (pitch > 55°); an upright handheld phone
+  // NEVER culls. null pitch (no motion fix) = static band, never culls.
+  const floorCull = isPointingAtFloor(devicePitch);
 
   const baseHorizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
-  const horizonY = baseHorizonY - pitchOffset;
+  const horizonY = horizonYForPitch(devicePitch, baseHorizonY, screenHeight);
   const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
   const maxScreenY = Math.max(12, screenHeight - CARD_HEIGHT_PX - 24);
 
   const projected: PlacedPlacard[] = inFov
-    .filter(() => !isPointingAtFloor)
+    .filter(() => !floorCull)
     .map(({ pin, projected }) => {
     const rawX = screenWidth * (projected.screenXNorm * 0.5 + 0.5);
     const screenX = clamp(rawX, HEDGE_MARGIN_PX, screenWidth - HEDGE_MARGIN_PX);
@@ -360,11 +355,19 @@ function BearingChip({ bearingDeg }: { bearingDeg: number }) {
   );
 }
 
-function DistanceChip({ meters }: { meters: number }) {
+function DistanceChip({ meters, realMeters }: { meters: number; realMeters?: number }) {
+  // Corridor-remapped far event: the AR slot is inside the walk radius but
+  // the venue is not — label the TRUE distance so the user is never misled
+  // about walkability (e.g. Union Square event mapped to a 300 m slot:
+  // "300 m slot · 3.5 km • Far").
+  const far = realMeters !== undefined && realMeters > meters + 1;
+  const label = far
+    ? `${formatDistance(meters)} slot · ${formatDistance(realMeters)} • Far`
+    : formatDistance(meters);
   return (
     <View style={styles.distanceChip}>
       <Text style={styles.distanceIcon}>◎</Text>
-      <Text style={styles.distanceText}>{formatDistance(meters)}</Text>
+      <Text style={styles.distanceText}>{label}</Text>
     </View>
   );
 }
@@ -397,7 +400,7 @@ function VenueCard({
         {placard.pin.name}
       </Text>
       <View style={styles.cardBottomRow}>
-        <DistanceChip meters={placard.distanceM} />
+        <DistanceChip meters={placard.distanceM} realMeters={placard.pin.real_distance_m} />
         {moreCount > 0 ? (
           <View style={styles.moreBadge}>
             <Text style={styles.moreBadgeText}>+{moreCount} more activities</Text>
@@ -440,7 +443,7 @@ function DetailPage({
       </Text>
       {startsAt ? <Text style={styles.metaLine}>🗓 {startsAt}</Text> : null}
       <View style={styles.cardBottomRow}>
-        <DistanceChip meters={placard.distanceM} />
+        <DistanceChip meters={placard.distanceM} realMeters={placard.pin.real_distance_m} />
         <View style={styles.pageBadge}>
           <Text style={styles.pageBadgeText}>
             {index + 1}/{total}
@@ -675,9 +678,9 @@ export default function PlacardOverlay({
         <View style={styles.honestZeroCard}>
           <Text style={styles.honestZeroEmoji}>◎</Text>
           <Text style={styles.honestZeroTitle}>
-            0 verified places found within walk radius.
+            0 verified places match this filter.
           </Text>
-          <Text style={styles.honestZeroSub}>Try adjusting your query or filter.</Text>
+          <Text style={styles.honestZeroSub}>Try a different query or chip.</Text>
         </View>
       </View>
     );

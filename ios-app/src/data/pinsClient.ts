@@ -19,8 +19,11 @@
  * inside SF bounds are therefore mapped onto the walk corridor: the REAL
  * bearing from the user is preserved (the direction you face an event is
  * honest), while the walked distance is compressed into the 500 m render
- * radius so the events project as AR pins the gate will accept. Events
- * outside SF bounds are dropped — never guessed.
+ * radius so the events project as AR pins the gate will accept. Remapped
+ * pins keep their true distance in `real_distance_m` so the placard can
+ * show an honest "3.5 km • Far" badge (regression follow-up to the
+ * 2026-11-04 0/19 weekend incident) instead of implying a short walk.
+ * Events outside SF bounds are dropped — never guessed.
  *
  * On any transport failure the caller gets the bundled fixture back with
  * source "demo" and a human-readable note; the caller decides nothing:
@@ -219,10 +222,18 @@ function remapIntoCorridor(
   };
 }
 
-/** Corridor slot for coordinate-less items (deterministic spiral pattern). */
+/**
+ * Corridor slot for coordinate-less items (deterministic golden-angle
+ * spiral). idx 0 starts due north; each subsequent slot advances by the
+ * golden angle (~137.5°) around the user while the radius steps through
+ * the band — an even, deterministic distribution with no far-side pileup
+ * (the old idx*47 pattern clumped several early slots behind the user,
+ * contributing to the "0/19 in FOV" weekend incident at SW-facing headings).
+ */
 function corridorSlot(userLat: number, userLng: number, idx: number): { lat: number; lng: number } {
+  const GOLDEN_ANGLE_DEG = 137.50776405003785;
   const dist = REMAP_MIN_M + ((idx * 53) % (REMAP_MAX_M - REMAP_MIN_M));
-  const bearingDeg = (idx * 47) % 360;
+  const bearingDeg = (idx * GOLDEN_ANGLE_DEG) % 360;
   const rad = (bearingDeg * Math.PI) / 180;
   const dx = dist * Math.sin(rad);
   const dy = dist * Math.cos(rad);
@@ -301,12 +312,16 @@ export function mapMcpItemsToPins(
     let finalLat: number;
     let finalLng: number;
     let remapped = false;
+    let realDistanceM: number | undefined;
     if (r.lat !== null && r.lng !== null) {
       const { dx, dy, dist } = metersOffset(userLat, userLng, r.lat, r.lng);
       const spot = remapIntoCorridor(userLat, userLng, dx, dy, dist);
       finalLat = spot.lat;
       finalLng = spot.lng;
       remapped = spot.remapped;
+      // True distance from the user (even when not remapped) — the placard
+      // badge uses it for the honest "X km • Far" label.
+      realDistanceM = Math.round(dist);
     } else {
       const spot = corridorSlot(userLat, userLng, r.idx);
       finalLat = spot.lat;
@@ -334,6 +349,7 @@ export function mapMcpItemsToPins(
       kind: "event",
       starts_at: startsAt,
       source_tool: remapped ? "dayplay_mcp_corridor" : "dayplay_mcp_live",
+      ...(realDistanceM !== undefined ? { real_distance_m: realDistanceM } : {}),
     });
   }
   return livePins;

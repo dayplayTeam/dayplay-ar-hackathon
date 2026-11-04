@@ -219,6 +219,13 @@ function ArCameraScreen() {
   // text). Honest-Zero: an unmatched query maps to zero pins — the overlay
   // says so via the empty-state card; no fabricated fallback pins.
   const filtered = filterPins(pins, activeChip, submittedQuery);
+  // Honest-Zero card fires ONLY when the FILTERED pin set is empty — never
+  // while raw pins are merely outside the FOV/range (regression-locked after
+  // the 2026-11-04 "0/19 in FOV" weekend incident, where the card fired
+  // over 19 loaded pins that sat outside the render range). During loading
+  // or before the rig locks, the viewport stays clean (radar pulse / warming
+  // HUD instead).
+  const showEmptyState = !loadingPins && filtered.pins.length === 0 && rigReady(rig);
   // Voice origin: the last submitted query came from the voice input stream.
   const voiceOrigin =
     voiceQuery !== null && submittedQuery.trim() === voiceQuery.trim();
@@ -390,7 +397,7 @@ function ArCameraScreen() {
         screenHeight={screenHeight}
         isLandscape={screenWidth > screenHeight}
         devicePitch={rig.pitch}
-        showEmptyState={!loadingPins && rigReady(rig)}
+        showEmptyState={showEmptyState}
         onStats={onOverlayStats}
       />
 

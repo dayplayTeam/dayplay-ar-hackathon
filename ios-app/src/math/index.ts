@@ -25,6 +25,10 @@ export {
   screenXNorm,
   isVisibleInFov,
   projectPin,
+  FLOOR_CULL_PITCH_DEG,
+  VFOV_DEG,
+  isPointingAtFloor,
+  horizonYForPitch,
   // gate
   MAX_RANGE_METERS,
   SF_BOUNDS,

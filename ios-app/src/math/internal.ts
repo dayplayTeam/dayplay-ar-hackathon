@@ -19,9 +19,13 @@ export { bearingDeg } from './bearing.ts';
 export {
   HFOV_DEG,
   HALF_FOV_DEG,
+  FLOOR_CULL_PITCH_DEG,
+  VFOV_DEG,
   relativeDeltaDeg,
   screenXNorm,
   isVisibleInFov,
+  isPointingAtFloor,
+  horizonYForPitch,
   projectPin,
 } from './frustum.ts';
 export type {
