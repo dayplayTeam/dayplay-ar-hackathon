@@ -533,21 +533,42 @@ const CHIP_KEYWORDS: Record<string, string[]> = {
  */
 function filterPins(pins: RawPin[], chip: string | null, query: string): { pins: RawPin[]; fellBack: boolean } {
   const keywords = queryKeywords(query);
-  const chipKey = chip ? chip.toLowerCase() : "";
-  const chipTerms = Object.entries(CHIP_KEYWORDS).find(([k]) => chipKey.includes(k))?.[1] ?? [];
   
-  // Single-authority: if user typed a query, query takes priority. If chip active without query, chip takes priority.
-  const terms = keywords.length > 0 ? keywords : chipTerms;
-  if (terms.length === 0) return { pins, fellBack: false };
+  // 1. Text search has top authority: if user entered text keywords, filter by text
+  if (keywords.length > 0) {
+    const matched = pins.filter((pin) => {
+      const name = pin.name.toLowerCase();
+      const kind = pin.kind.toLowerCase();
+      return keywords.some((k) => name.includes(k) || kind.includes(k));
+    });
+    return { pins: matched, fellBack: false };
+  }
 
-  const matched = pins.filter((pin) => {
-    const name = pin.name.toLowerCase();
-    const kind = pin.kind.toLowerCase();
-    return terms.some((t) => name.includes(t) || kind.includes(t));
-  });
-  
-  // Honest zero: return exactly what matched, never fake fallback pins!
-  return { pins: matched, fellBack: false };
+  // 2. Chip filter:
+  // When pins are returned from the live API for a temporal chip ('today', 'weekend', 'live now'),
+  // the live MCP server ALREADY filtered semantically by time! Do NOT re-filter by literal keyword substring
+  // on event names (e.g. 'Powering the AI Economy' or 'Morning Coffee' do NOT contain the word 'weekend').
+  if (chip !== null && chip !== undefined) {
+    const chipKey = chip.toLowerCase();
+    const isTemporalChip = chipKey.includes("weekend") || chipKey.includes("today") || chipKey.includes("live");
+    if (isTemporalChip) {
+      // Trust the temporal intent — keep all returned events!
+      return { pins, fellBack: false };
+    }
+
+    const chipTerms = Object.entries(CHIP_KEYWORDS).find(([k]) => chipKey.includes(k))?.[1] ?? [];
+    if (chipTerms.length > 0) {
+      const matched = pins.filter((pin) => {
+        const name = pin.name.toLowerCase();
+        const kind = pin.kind.toLowerCase();
+        return chipTerms.some((t) => name.includes(t) || kind.includes(t));
+      });
+      return { pins: matched, fellBack: false };
+    }
+  }
+
+  // No active filter — return all pins
+  return { pins, fellBack: false };
 }
 
 const styles = StyleSheet.create({
