@@ -2,7 +2,7 @@
  * InputFilterBar — glassmorphic bottom search bar + quick intent chips.
  *
  * Layout (bottom docked, above safe-area bottom inset):
- *   [ 🔍 ai marketing meetups this week   🎙️ ✕ | ↵ ]
+ *   [ 🔍 Search places or tap a vibe chip...   🎙️ ✕ | ↵ ]
  *   [ ⚡ What's live now ] [ 📅 Happening today ] [ 🎉 … ]
  *
  * Styling: DayPlay dark canon tokens (src/theme/dayplay.ts) — glass
