@@ -122,6 +122,7 @@ export interface PlacardOverlayProps {
   userPosition: UserPosition | null;
   /** True-North heading in degrees [0, 360), or null until compass locks. */
   userHeading: number | null;
+  devicePitch?: number | null;
   screenWidth: number;
   screenHeight: number;
   /** Optional per-frame stats for the HUD placard counter. */
@@ -192,6 +193,7 @@ export function buildPlacards(
   screenWidth: number,
   screenHeight: number,
   isLandscape: boolean = false,
+  devicePitch?: number | null,
 ): { placed: PlacedPlacard[]; rejected: Array<{ index: number; reason: GateReason }> } {
   const rejected: Array<{ index: number; reason: GateReason }> = [];
 
@@ -616,14 +618,15 @@ export default function PlacardOverlay({
   pins,
   userPosition,
   userHeading,
+  devicePitch,
   screenWidth,
   screenHeight,
   isLandscape = false,
   onStats,
 }: PlacardOverlayProps) {
   const { placed, rejected } = useMemo(
-    () => buildPlacards(pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape),
-    [pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape],
+    () => buildPlacards(pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape, devicePitch),
+    [pins, userPosition, userHeading, screenWidth, screenHeight, isLandscape, devicePitch],
   );
 
   const decks = useMemo(() => buildDecks(placed), [placed]);
