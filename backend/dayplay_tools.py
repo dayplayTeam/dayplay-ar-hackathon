@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List
 # Walking-time conversion used everywhere (matches sim/index.html: radius_min * 80 m).
 METERS_PER_WALK_MIN = 80.0
 # Corridor anchor: Valencia & 16th (same anchor the FOV sim boots at).
-CORRIDOR_ANCHOR = {"lat": 37.7601, "lng": -122.4198}
+CORRIDOR_ANCHOR = {"lat": 37.758150, "lng": -122.417930}
 
 Filter = Dict[str, Any]
 Executor = Callable[[str, Dict[str, Any]], List[Dict[str, Any]]]

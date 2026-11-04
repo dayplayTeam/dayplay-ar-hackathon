@@ -65,6 +65,15 @@ function rigReady(rig: Rig): boolean {
   return rig.gpsStatus === "locked" && rig.headingStatus === "locked";
 }
 
+/** Map chip label to typed MCP intent */
+function chipToIntent(chip: string | null): "live_now" | "today" | "weekend" {
+  if (!chip) return "live_now";
+  const c = chip.toLowerCase();
+  if (c.includes("weekend")) return "weekend";
+  if (c.includes("today")) return "today";
+  return "live_now";
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -142,7 +151,7 @@ function ArCameraScreen() {
       setPinSource("live");
       setLoadingPins(true);
       const coords = effectiveUser ? { lat: effectiveUser.lat, lng: effectiveUser.lng } : undefined;
-      void fetchRealPins(undefined, coords).then((result) => {
+      void fetchRealPins("live_now", undefined, coords).then((result) => {
         setPins(result.pins);
         setPinSource(result.source);
         setPinSourceNote(result.error);
@@ -169,7 +178,7 @@ function ArCameraScreen() {
       if (pinSource === "live") {
         setLoadingPins(true);
         const coords = effectiveUser ? { lat: effectiveUser.lat, lng: effectiveUser.lng } : undefined;
-        void fetchRealPins(undefined, coords, chip).then((result) => {
+        void fetchRealPins(chipToIntent(chip), undefined, coords).then((result) => {
           setPins(result.pins);
           setPinSource(result.source);
           setPinSourceNote(result.error);
