@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
+import { DeviceMotion } from "expo-sensors";
 import PlacardOverlay, { type OverlayStats } from "./src/components/PlacardOverlay.tsx";
 import HudBar, { type HudBarProps } from "./src/components/HudBar.tsx";
 import InputFilterBar from "./src/components/InputFilterBar.tsx";
@@ -20,6 +21,7 @@ type Rig = {
   headingAccuracy: number | null;
   gpsStatus: "acquiring" | "locked";
   headingStatus: "acquiring" | "locked";
+  pitch: number | null;
   error: string | null;
 };
 
@@ -42,6 +44,7 @@ const INITIAL_RIG: Rig = {
   headingAccuracy: null,
   gpsStatus: "acquiring",
   headingStatus: "acquiring",
+  pitch: null,
   error: null,
 };
 
@@ -86,6 +89,7 @@ function ArCameraScreen() {
   const [pinSource, setPinSource] = useState<PinSource>("demo");
   const [pins, setPins] = useState(CORRIDOR_REAL_FIXTURES);
   const [pinSourceNote, setPinSourceNote] = useState<string | null>(null);
+  const [loadingPins, setLoadingPins] = useState(true);
   const [overlayStats, setOverlayStats] = useState<OverlayStats | null>(null);
   const [anchorToSf, setAnchorToSf] = useState<boolean>(true);
   // HUD density: "standard" pill bar | "expanded" telemetry panel | "minimized"
@@ -94,8 +98,8 @@ function ArCameraScreen() {
 
   // Quick intent filter state (InputFilterBar).
   const [activeChip, setActiveChip] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("ai marketing meetups this week");
-  const [submittedQuery, setSubmittedQuery] = useState("ai marketing meetups this week");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [barCollapsed, setBarCollapsed] = useState(false);
   // Voice input stream: last voice-captured query (VoiceInputButton). When the
   // submitted query equals the last captured voice text, the HUD banner flips
@@ -106,11 +110,13 @@ function ArCameraScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingPins(true);
     void fetchRealPins().then((result) => {
       if (cancelled) return;
       setPins(result.pins);
       setPinSource(result.source);
-      setPinSourceNote(result.error); // null on success, error string on fallback
+      setPinSourceNote(result.error);
+      setLoadingPins(false);
     });
     return () => {
       cancelled = true;
@@ -120,7 +126,8 @@ function ArCameraScreen() {
   const togglePinSource = useCallback(() => {
     if (pinSource === "demo") {
       setPinSource("live");
-      void fetchRealPins().then((result) => {
+      setLoadingPins(true);
+    void fetchRealPins().then((result) => {
         setPins(result.pins);
         setPinSource(result.source);
         setPinSourceNote(result.error); // failed live fetch silently reverts to demo data
@@ -138,15 +145,26 @@ function ArCameraScreen() {
 
   const onSelectChip = useCallback((chip: string | null) => {
     setActiveChip(chip);
+    if (chip !== null) {
+      // Clear free-text input so chip is the sole authority
+      setSearchQuery("");
+      setSubmittedQuery("");
+    }
   }, []);
 
   const onChangeSearchQuery = useCallback((query: string) => {
     setSearchQuery(query);
+    if (query.trim().length > 0) {
+      setActiveChip(null); // Text query takes over authority
+    }
   }, []);
 
   const onSubmitQuery = useCallback((query: string) => {
     setSearchQuery(query);
     setSubmittedQuery(query);
+    if (query.trim().length > 0) {
+      setActiveChip(null);
+    }
   }, []);
 
   const onClearFilter = useCallback(() => {
@@ -424,7 +442,9 @@ function filterPins(pins: RawPin[], chip: string | null, query: string): { pins:
   const keywords = queryKeywords(query);
   const chipKey = chip ? chip.toLowerCase() : "";
   const chipTerms = Object.entries(CHIP_KEYWORDS).find(([k]) => chipKey.includes(k))?.[1] ?? [];
-  const terms = [...new Set([...chipTerms, ...keywords])];
+  
+  // Single-authority: if user typed a query, query takes priority. If chip active without query, chip takes priority.
+  const terms = keywords.length > 0 ? keywords : chipTerms;
   if (terms.length === 0) return { pins, fellBack: false };
 
   const matched = pins.filter((pin) => {
@@ -432,11 +452,9 @@ function filterPins(pins: RawPin[], chip: string | null, query: string): { pins:
     const kind = pin.kind.toLowerCase();
     return terms.some((t) => name.includes(t) || kind.includes(t));
   });
-  if (matched.length > 0 || keywords.length === 0) {
-    return { pins: matched, fellBack: false };
-  }
-  // No keyword matches — surface the primary demo pins (first 3 fixtures).
-  return { pins: pins.slice(0, 3), fellBack: true };
+  
+  // Honest zero: return exactly what matched, never fake fallback pins!
+  return { pins: matched, fellBack: false };
 }
 
 const styles = StyleSheet.create({
@@ -458,6 +476,30 @@ const styles = StyleSheet.create({
   centerNoticeTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
   centerNoticeText: { color: "#cbd5e1", textAlign: "center", fontSize: 13 },
   centerNoticeFootnote: { color: "#64748b", fontSize: 11, textAlign: "center", marginTop: 4 },
+  loadingPulseWrap: {
+    position: "absolute",
+    top: "30%",
+    left: 20,
+    right: 20,
+    alignItems: "center",
+    zIndex: 10,
+  },
+  loadingPulseCard: {
+    backgroundColor: "rgba(28,27,26,0.92)",
+    borderColor: "rgba(255,107,71,0.5)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    gap: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  loadingPulseEmoji: { fontSize: 20 },
+  loadingPulseTitle: { color: "#FF6B47", fontSize: 13, fontWeight: "700" },
+  loadingPulseSub: { color: "#A19D97", fontSize: 11 },
   intentBanner: {
     position: "absolute",
     left: 16,

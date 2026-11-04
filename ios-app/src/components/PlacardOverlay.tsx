@@ -223,18 +223,23 @@ export function buildPlacards(
   // 4a. Screen pixel mapping + distance-based vertical placement.
   // Landscape phones (~800-930 x ~390-430px): horizon sits a touch lower and
   // the near-pin band compresses so cards never clip off the short bottom edge.
-  const horizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
+  // Pitch & Altitude compensation: when viewing from an elevated position (highrise),
+  // device tilts downward (pitch > 0 deg). Offset horizon up so street pins project downward naturally.
+  // Standard handheld pitch is ~60-70 deg vertical; looking down from highrise is 20-50 deg.
+  const pitchOffset = devicePitch !== null && devicePitch !== undefined 
+    ? clamp((devicePitch - 60) * 4.5, -screenHeight * 0.35, screenHeight * 0.35) 
+    : 0;
+
+  const baseHorizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
+  const horizonY = baseHorizonY - pitchOffset;
   const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
-  // Hard on-screen clamp: a card anchor can never sit below the viewport
-  // minus one card height, regardless of projection rounding.
   const maxScreenY = Math.max(12, screenHeight - CARD_HEIGHT_PX - 24);
 
   const projected: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
-    // Exact contract mapping: x = width * (screenXNorm * 0.5 + 0.5).
     const rawX = screenWidth * (projected.screenXNorm * 0.5 + 0.5);
     const screenX = clamp(rawX, HEDGE_MARGIN_PX, screenWidth - HEDGE_MARGIN_PX);
     const distanceNorm = clamp(projected.distanceM / MAX_RANGE_METERS, 0, 1);
-    const rawScreenY = horizonY + (1 - distanceNorm) * spread; // near = lower, far = at horizon
+    const rawScreenY = horizonY + (1 - distanceNorm) * spread;
     const screenY = clamp(rawScreenY, 12, maxScreenY);
     const depthScale = 1.2 - 0.5 * distanceNorm; // 1.2 (near) -> 0.7 (far)
     const depthOpacity = 1.0 - 0.45 * distanceNorm; // 1.0 -> 0.55
@@ -646,6 +651,31 @@ export default function PlacardOverlay({
 /* ---------------------------------------------------------------- styles */
 
 const styles = StyleSheet.create({
+  honestZeroWrap: {
+    position: "absolute",
+    top: "38%",
+    left: 24,
+    right: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  honestZeroCard: {
+    backgroundColor: "rgba(28,27,26,0.92)",
+    borderColor: "rgba(255,107,71,0.4)",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    gap: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  honestZeroEmoji: { fontSize: 24 },
+  honestZeroTitle: { color: "#FF6B47", fontSize: 15, fontWeight: "800", letterSpacing: 0.5 },
+  honestZeroSub: { color: "#A19D97", fontSize: 12, textAlign: "center", lineHeight: 16 },
   anchorWrap: { position: "absolute" },
   backdrop: {
     position: "absolute",

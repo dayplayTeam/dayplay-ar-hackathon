@@ -22,6 +22,7 @@ import {
   ScrollView,
   Text,
   useWindowDimensions,
+  Keyboard,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -117,7 +118,7 @@ export default function InputFilterBar({
   collapsed = false,
   onExpand,
   onVoiceQuery,
-  initialQuery = "ai marketing meetups this week",
+  initialQuery = "",
 }: InputFilterBarProps) {
   const [localQuery, setLocalQuery] = useState(searchQuery || initialQuery);
   // Landscape: rotation happens on the fly — re-read the window each render.
@@ -148,7 +149,10 @@ export default function InputFilterBar({
     );
   }
 
-  const submit = () => onSubmitQuery(localQuery.trim());
+  const submit = () => {
+    Keyboard.dismiss();
+    onSubmitQuery(localQuery.trim());
+  };
 
   /** Voice capture: populate the field, route upstream, auto-submit the filter. */
   const onVoiceResult = (query: string) => {
@@ -168,7 +172,7 @@ export default function InputFilterBar({
             accessibilityLabel="Search DayPlay pins"
             style={styles.input}
             value={localQuery}
-            placeholder={initialQuery}
+            placeholder="Search places or tap a vibe chip..."
             placeholderTextColor={PLACEHOLDER}
             onChangeText={setLocalQuery}
             onSubmitEditing={submit}
