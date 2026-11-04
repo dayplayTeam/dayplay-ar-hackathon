@@ -132,10 +132,11 @@ function ArCameraScreen() {
     if (pinSource === "demo") {
       setPinSource("live");
       setLoadingPins(true);
-      void fetchRealPins().then((result) => {
+      const coords = effectiveUser ? { lat: effectiveUser.lat, lng: effectiveUser.lng } : undefined;
+      void fetchRealPins(undefined, coords).then((result) => {
         setPins(result.pins);
         setPinSource(result.source);
-        setPinSourceNote(result.error); // failed live fetch silently reverts to demo data
+        setPinSourceNote(result.error);
         setLoadingPins(false);
       });
     } else {
@@ -143,7 +144,7 @@ function ArCameraScreen() {
       setPins(CORRIDOR_REAL_FIXTURES);
       setPinSourceNote(null);
     }
-  }, [pinSource]);
+  }, [pinSource, effectiveUser]);
 
   const onOverlayStats = useCallback((stats: OverlayStats) => {
     setOverlayStats(stats);
@@ -359,7 +360,7 @@ function ArCameraScreen() {
         screenHeight={screenHeight}
         isLandscape={screenWidth > screenHeight}
         devicePitch={rig.pitch}
-        showEmptyState={!loadingPins}
+        showEmptyState={!loadingPins && rigReady(rig)}
         onStats={onOverlayStats}
       />
 
