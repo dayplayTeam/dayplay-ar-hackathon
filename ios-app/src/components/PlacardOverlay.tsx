@@ -235,22 +235,29 @@ export function buildPlacards(
   // frame, so horizonY moves UP with pitch and the near-pin band stretches
   // downward — ground-level places stay mapped to the ground instead of
   // floating mid-air on the static band. null (no motion fix) = static band.
-  const pitchNorm =
-    devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
-      ? clamp(devicePitch, 0, 90) / 90
-      : 0;
+  // Pitch & Altitude Perspective Mapping:
+  // When holding phone upright looking at horizon: pitch is ~70°-90°.
+  // When pointing DOWN at the ground/floor (e.g. from a highrise): pitch is < 40°.
+  // Camera VFOV (vertical field of view) is ~50° (±25° from center).
+  // If pointing steeply down at the floor (< 38° pitch), horizontal street-level pins
+  // are outside the camera's vertical field of view and MUST be culled (not drawn at feet).
+  const isPointingAtFloor = devicePitch !== null && devicePitch !== undefined && devicePitch < 38;
+
+  // Pitch offset: tilting down shifts the horizon UPWARDS towards top of screen.
+  // When pitch is 80° (level horizon), pitchOffset = 0.
+  // When tilted down to 50°, horizon moves up by ~30° equivalent in screen pixels.
+  const pitchOffset = devicePitch !== null && devicePitch !== undefined && Number.isFinite(devicePitch)
+    ? (80 - clamp(devicePitch, 38, 90)) * (screenHeight / 50.0)
+    : 0;
+
   const baseHorizonY = screenHeight * (isLandscape ? HORIZON_Y_FRACTION_LANDSCAPE : HORIZON_Y_FRACTION_PORTRAIT);
-  const pitchOffset = pitchNorm * screenHeight * 0.5;
-  const horizonY = Math.max(12, baseHorizonY - pitchOffset);
-  // Steeper viewpoint -> the ground plane fills more of the frame, so the
-  // near-pin band stretches up to +50% to keep near pins low on screen.
-  const spread =
-    screenHeight *
-    (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT) *
-    (1 + 0.5 * pitchNorm);
+  const horizonY = baseHorizonY - pitchOffset;
+  const spread = screenHeight * (isLandscape ? VERTICAL_SPREAD_FRACTION_LANDSCAPE : VERTICAL_SPREAD_FRACTION_PORTRAIT);
   const maxScreenY = Math.max(12, screenHeight - CARD_HEIGHT_PX - 24);
 
-  const projected: PlacedPlacard[] = inFov.map(({ pin, projected }) => {
+  const projected: PlacedPlacard[] = inFov
+    .filter(() => !isPointingAtFloor)
+    .map(({ pin, projected }) => {
     const rawX = screenWidth * (projected.screenXNorm * 0.5 + 0.5);
     const screenX = clamp(rawX, HEDGE_MARGIN_PX, screenWidth - HEDGE_MARGIN_PX);
     const distanceNorm = clamp(projected.distanceM / MAX_RANGE_METERS, 0, 1);
