@@ -90,7 +90,8 @@ export async function transcribeRecording(
     // Direct-cloud fallback: no local backend configured — resolve the
     // user's own query text against the live production MCP instead of
     // blocking. Never a hard error; never a fabricated transcript (only
-    // the user's own words are resolved).
+    // the user's own words are resolved). resolveApiUrl already tried
+    // EXPO_PUBLIC_API_URL then Expo Metro LAN host:8000 before landing here.
     return searchSmartResolve(trimmedClient, undefined, undefined);
   }
 

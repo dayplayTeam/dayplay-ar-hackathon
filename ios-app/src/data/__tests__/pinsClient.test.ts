@@ -8,7 +8,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CORRIDOR_REAL_FIXTURES, mapMcpItemsToPins } from '../pinsClient.ts';
+import {
+  CORRIDOR_REAL_FIXTURES,
+  deriveLanApiUrlFromHostUri,
+  mapMcpItemsToPins,
+} from '../pinsClient.ts';
 
 const ANCHOR = { lat: 37.75815, lng: -122.41793 }; // Valencia & 20th (SF Mission anchor)
 
@@ -170,4 +174,17 @@ test('LIVE blend: verified corridor anchors ride along with live events (never a
     assert.equal(a.is_walkable_anchor, true);
     assert.equal((a as { source_tool?: unknown }).source_tool, 'supabase_entities_anon', 'anchors keep verified provenance');
   }
+});
+
+test('deriveLanApiUrlFromHostUri maps Expo Metro host to backend :8000', () => {
+  assert.equal(deriveLanApiUrlFromHostUri('192.168.1.12:8081'), 'http://192.168.1.12:8000');
+  assert.equal(deriveLanApiUrlFromHostUri('exp://10.0.0.5:8081'), 'http://10.0.0.5:8000');
+  assert.equal(
+    deriveLanApiUrlFromHostUri('http://192.168.4.20:8081/index.bundle?platform=ios'),
+    'http://192.168.4.20:8000',
+  );
+  assert.equal(deriveLanApiUrlFromHostUri('localhost:8081'), 'http://localhost:8000');
+  assert.equal(deriveLanApiUrlFromHostUri(null), null);
+  assert.equal(deriveLanApiUrlFromHostUri(''), null);
+  assert.equal(deriveLanApiUrlFromHostUri('   '), null);
 });

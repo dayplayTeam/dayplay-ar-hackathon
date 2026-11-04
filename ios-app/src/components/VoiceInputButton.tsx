@@ -219,6 +219,8 @@ export default function VoiceInputButton({
   const recordingRef = useRef<AudioRecorder | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref avoids a stale/circular useCallback between metering poll ↔ finish.
+  const finishRecordingRef = useRef<() => Promise<void>>(async () => undefined);
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current) {
@@ -244,7 +246,7 @@ export default function VoiceInputButton({
       }
     }, METER_POLL_MS);
     maxTimer.current = setTimeout(() => {
-      void finishRecording();
+      void finishRecordingRef.current();
     }, MAX_RECORDING_MS);
   }, []);
 
@@ -280,7 +282,7 @@ export default function VoiceInputButton({
     if (!uri) {
       // Nothing recorded (mic failed / instant cancel): fail visibly, never
       // fabricate a transcript.
-      setStatusText("No audio captured — try again");
+      setStatusText("No audio captured — try again or tap a sample below");
       setPhase("idle");
       if (!wasOpen) setSheetOpen(false);
       return;
@@ -288,11 +290,11 @@ export default function VoiceInputButton({
 
     try {
       const result = await transcribeRecording(uri, undefined, apiUrl);
-      setSheetOpen(false);
       setPhase("idle");
       setMeteringLevel(-160);
       setPendingResolve(null);
       if (result.ok) {
+        setSheetOpen(false);
         onVoiceResult(result); // full result: text + intent + gate-verified pins
       } else {
         // Audio was captured but STT could not run (no backend / offline).
@@ -310,9 +312,11 @@ export default function VoiceInputButton({
     } catch {
       setSheetOpen(wasOpen);
       setPhase("idle");
-      setStatusText("Voice transcription failed");
+      setStatusText("Voice transcription failed — tap a sample below");
     }
   }, [apiUrl, onVoiceResult, sheetOpen, teardownRecording]);
+
+  finishRecordingRef.current = finishRecording;
 
   /** Begin real recording: permission → audio mode → metering recorder. */
   const beginRecording = useCallback(async () => {

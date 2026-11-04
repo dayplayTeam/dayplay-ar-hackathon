@@ -186,15 +186,72 @@ const WALK_RADIUS_M = 1170;
 const REMAP_MIN_M = 260;
 const REMAP_MAX_M = 1150;
 
-/** Read the API base URL from the Expo env (set EXPO_PUBLIC_API_URL to point
- * at the backend), or the caller-provided override. */
+/**
+ * Derive `http://<lan-host>:8000` from an Expo Metro hostUri / debuggerHost.
+ * Expo Go on a physical phone already talks to the Mac over LAN for JS; the
+ * FastAPI voice backend typically shares that host on port 8000. Pure helper
+ * so unit tests can lock the parsing without Expo Constants.
+ *
+ * Accepts forms like:
+ *   "192.168.1.12:8081"
+ *   "exp://192.168.1.12:8081"
+ *   "http://192.168.1.12:8081"
+ *   "192.168.1.12:8081/index.bundle?..."
+ */
+export function deriveLanApiUrlFromHostUri(
+  hostUri: string | null | undefined,
+  port = 8000,
+): string | null {
+  if (typeof hostUri !== "string") return null;
+  let cleaned = hostUri.trim();
+  if (cleaned.length === 0) return null;
+  cleaned = cleaned.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  cleaned = cleaned.split(/[/?#]/)[0] ?? "";
+  const host = (cleaned.split(":")[0] ?? "").trim();
+  if (!host) return null;
+  // IPv6 literals are rare in Expo hostUri; reject anything with whitespace.
+  if (/\s/.test(host)) return null;
+  return `http://${host}:${port}`;
+}
+
+/**
+ * Read the API base URL, in priority order:
+ *   1. caller override
+ *   2. EXPO_PUBLIC_API_URL (explicit .env / shell)
+ *   3. LAN host derived from Expo Metro (same Mac the phone already reaches)
+ *
+ * (3) fixes the voice-input bug where Expo Go opened the mic sheet but
+ * /transcribe failed with "no backend URL (set EXPO_PUBLIC_API_URL)" whenever
+ * the env var was unset — the common demo path.
+ */
 export function resolveApiUrl(apiUrl?: string): string | null {
+  if (typeof apiUrl === "string" && apiUrl.trim().length > 0) {
+    return apiUrl.trim();
+  }
   const fromEnv =
     typeof process !== "undefined" && process.env
       ? process.env.EXPO_PUBLIC_API_URL
       : undefined;
-  const url = apiUrl ?? fromEnv;
-  return typeof url === "string" && url.trim().length > 0 ? url.trim() : null;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+  try {
+    // Lazy require so node:test imports of pure helpers don't need Expo.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Constants = require("expo-constants").default as {
+      expoConfig?: { hostUri?: string | null } | null;
+      debuggerHost?: string | null;
+      experienceUrl?: string | null;
+    };
+    const hostUri =
+      Constants?.expoConfig?.hostUri ??
+      Constants?.debuggerHost ??
+      Constants?.experienceUrl ??
+      null;
+    return deriveLanApiUrlFromHostUri(hostUri);
+  } catch {
+    return null;
+  }
 }
 
 /** Equirectangular meters offset between two WGS-84 points (local frame). */
