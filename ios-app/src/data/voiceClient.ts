@@ -1,7 +1,7 @@
 /**
  * voiceClient — real voice pickup client for the Muse/Meta tool loop.
  *
- * Uploads the expo-av .m4a recording to the backend `POST /transcribe`
+ * Uploads the expo-audio .m4a recording to the backend `POST /transcribe`
  * endpoint (EXPO_PUBLIC_API_URL, same base the live MCP pin fetch uses),
  * which transcribes the audio with a local whisper.cpp model and routes the
  * resolved text through the pipeline's Muse native tool loop:
@@ -66,7 +66,7 @@ export function resolveBackendUrl(apiUrl?: string): string | null {
 /**
  * Send a finished recording to the backend /transcribe endpoint.
  *
- * @param uri local file URI of the expo-av .m4a recording
+ * @param uri local file URI of the expo-audio .m4a recording
  * @param clientText optional client speech transcript (sent as `text`)
  * @param apiUrl optional backend base URL override
  */

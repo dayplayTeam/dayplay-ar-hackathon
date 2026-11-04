@@ -4,16 +4,26 @@
  * Real audio pipeline (no simulated waveforms, no fake transcripts):
  *
  *   1. Tap the 🎙️ mic → mic permission is requested via
- *      `Audio.requestPermissionsAsync()` (expo-av).
- *   2. On grant, an `Audio.Recording` starts with
- *      `isMeteringEnabled: true`; the waveform bars are driven by REAL live
- *      audio levels from `recording.getStatusAsync().metering` (dBFS,
- *      −160..0) polled every 100 ms — silence sits low, speech spikes it.
+ *      `requestRecordingPermissionsAsync()` (expo-audio).
+ *   2. On grant, an `AudioRecorder` starts with `isMeteringEnabled: true`;
+ *      the waveform bars are driven by REAL live audio levels from
+ *      `recorder.getStatus().metering` (dB) polled every 100 ms — silence
+ *      sits low, speech spikes it.
  *   3. "Done speaking" (or Cancel) stops the recorder and grabs the file
  *      URI. The .m4a is uploaded to the backend `POST /transcribe`
  *      (EXPO_PUBLIC_API_URL), which transcribes it with a local whisper.cpp
  *      model and routes the text through the pipeline's Muse/Meta native
  *      tool loop → `{ text, intent, pins }` (gate-verified pins).
+ *
+ * NATIVE-SAFETY NOTE (2026-11-04 crash fix): this component uses
+ * `expo-audio` (native module `ExpoAudio`), NOT `expo-av`. `expo-av` was
+ * removed: its native module `ExponentAV` is NOT compiled into the Expo Go
+ * SDK 58 iOS client (verified against expo/expo sdk-58 apps/expo-go
+ * package.json — expo-audio vendored, expo-av absent), so any
+ * `requireNativeModule('ExponentAV')` crashed the app at import time
+ * ("[runtime not ready]: Cannot find native module 'ExponentAV'").
+ * `expo-audio` IS vendored into Expo Go 58, so the real mic pipeline runs
+ * in Expo Go with zero native build.
  *   4. If the backend is unreachable (demo mode / airplane), the client
  *      transcript is unavailable in Expo Go (no native speech module), so
  *      the preset chips remain as an explicit manual fallback — they route
@@ -34,7 +44,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { Audio } from "expo-av";
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  type AudioRecorder,
+} from "expo-audio";
 
 import { transcribeRecording, type VoiceTranscribeResult } from "../data/voiceClient.ts";
 import {
@@ -183,7 +199,14 @@ export default function VoiceInputButton({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [meteringLevel, setMeteringLevel] = useState(-160);
   const [statusText, setStatusText] = useState("Tap Done when you finish speaking");
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  // expo-audio: the hook owns the recorder instance (lifecycle-managed);
+  // a ref mirrors it so imperative stop/teardown can run from callbacks.
+  const recorder = useAudioRecorder(
+    { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true },
+    undefined,
+  );
+  const recorderRef = useRef<AudioRecorder>(recorder);
+  const recordingRef = useRef<AudioRecorder | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -199,40 +222,38 @@ export default function VoiceInputButton({
   }, []);
 
   /** Real live audio levels → metering state → waveform bars. */
-  const startMeteringPoll = useCallback((recording: Audio.Recording) => {
+  const startMeteringPoll = useCallback((activeRecorder: AudioRecorder) => {
     pollTimer.current = setInterval(() => {
-      recording
-        .getStatusAsync()
-        .then((status) => {
-          if (status.isRecording && typeof status.metering === "number") {
-            setMeteringLevel(status.metering);
-          }
-        })
-        .catch(() => {
-          /* transient status errors during recorder teardown — ignore */
-        });
+      try {
+        const status = activeRecorder.getStatus();
+        if (status.isRecording && typeof status.metering === "number") {
+          setMeteringLevel(status.metering);
+        }
+      } catch {
+        /* transient status errors during recorder teardown — ignore */
+      }
     }, METER_POLL_MS);
     maxTimer.current = setTimeout(() => {
       void finishRecording();
     }, MAX_RECORDING_MS);
   }, []);
 
-  /** Stop + unload the recorder, release audio mode, return the file URI. */
+  /** Stop the recorder, release audio mode, return the file URI. */
   const teardownRecording = useCallback(async (): Promise<string | null> => {
     stopPolling();
-    const recording = recordingRef.current;
+    const activeRecorder = recordingRef.current;
     recordingRef.current = null;
     let uri: string | null = null;
-    if (recording) {
+    if (activeRecorder) {
       try {
-        await recording.stopAndUnloadAsync();
+        await activeRecorder.stop();
       } catch {
-        /* already stopped / unloaded */
+        /* already stopped */
       }
-      uri = recording.getURI();
+      uri = activeRecorder.uri;
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     } catch {
       /* audio mode restore is best-effort */
     }
@@ -279,33 +300,31 @@ export default function VoiceInputButton({
     setStatusText("Listening…");
     setMeteringLevel(-160);
     try {
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         setStatusText("Microphone permission denied — enable it in Settings");
         setPhase("idle");
         return;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-      const { recording } = await Audio.Recording.createAsync(
-        {
-          ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-          isMeteringEnabled: true, // REAL audio metering for the waveform
-        },
-        undefined,
-        METER_POLL_MS,
-      );
-      recordingRef.current = recording;
-      startMeteringPoll(recording);
+      const activeRecorder = recorderRef.current ?? recorder;
+      recorderRef.current = activeRecorder;
+      // REAL audio metering for the waveform (isMeteringEnabled from the
+      // hook options). prepare -> record, then poll getStatus().metering.
+      await activeRecorder.prepareToRecordAsync();
+      activeRecorder.record();
+      recordingRef.current = activeRecorder;
+      startMeteringPoll(activeRecorder);
     } catch (err) {
       console.warn("voice: failed to start recording", err);
       setStatusText("Could not start the microphone — try again");
       setPhase("idle");
       void teardownRecording();
     }
-  }, [startMeteringPoll, teardownRecording]);
+  }, [recorder, startMeteringPoll, teardownRecording]);
 
   /** Cancel: stop the mic and close — no transcript, no fabricated query. */
   const cancel = useCallback(async () => {
@@ -340,10 +359,10 @@ export default function VoiceInputButton({
   useEffect(
     () => () => {
       stopPolling();
-      const recording = recordingRef.current;
+      const activeRecorder = recordingRef.current;
       recordingRef.current = null;
-      if (recording) {
-        void recording.stopAndUnloadAsync().catch(() => undefined);
+      if (activeRecorder) {
+        void activeRecorder.stop().catch(() => undefined);
       }
     },
     [stopPolling],
